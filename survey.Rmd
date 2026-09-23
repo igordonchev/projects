@@ -1,0 +1,211 @@
+---
+title: "Part 1, 2 & 3 - Survey Data Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+In this project I will load the survey database, look at the tables, analyze the answer counts, and plot bar charts to compare student and professor answers.
+
+# Loading Data
+
+First I load the packages.
+
+```{r}
+library(DBI)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+```
+
+Now I connect to the database in Downloads.
+
+```{r}
+survey_db <- dbConnect(RSQLite::SQLite(), "C:/Users/Валентина Терешкова/Downloads/likert_survey.db")
+
+dbListTables(survey_db)
+```
+
+Next I extract the two tables into tibbles and close the connection.
+
+```{r}
+professors <- dbReadTable(survey_db, "PROFESSORS") %>% 
+  as_tibble()
+
+students <- dbReadTable(survey_db, "STUDENTS") %>% 
+  as_tibble()
+
+dbDisconnect(survey_db)
+```
+
+# Preview Data
+
+Here is a quick look at the datasets.
+
+```{r}
+head(professors)
+
+head(students)
+```
+
+# Part 2 - Survey Analysis
+
+## Reshaping Data into Long Format
+
+We use pivot_longer to make the data long so it is easier to count total answers.
+
+```{r}
+# Pivot student table
+students_long <- students %>% 
+  pivot_longer(
+    cols = -1, 
+    names_to = "question", 
+    values_to = "answer"
+  ) %>% 
+  filter(!is.na(answer))
+
+# Pivot professor table
+professors_long <- professors %>% 
+  pivot_longer(
+    cols = -1, 
+    names_to = "question", 
+    values_to = "answer"
+  ) %>% 
+  filter(!is.na(answer))
+```
+
+## Total Number of Answers Obtained from Students
+
+```{r}
+nrow(students_long)
+```
+
+## Total Number of Answers Obtained from Professors
+
+```{r}
+nrow(professors_long)
+```
+
+## Does Each Question Have the Same Number of Answers?
+
+### Student Answers per Question
+
+```{r}
+students_long %>% 
+  group_by(question) %>% 
+  summarise(n_answers = n())
+```
+
+### Professor Answers per Question
+
+```{r}
+professors_long %>% 
+  group_by(question) %>% 
+  summarise(n_answers = n())
+```
+
+# Part 3 - Side-by-Side Bar Charts
+
+## Adding Role Labels
+
+First I add a column to each table to know who is a Student and who is a Professor.
+
+```{r}
+students_long$role <- "Student"
+professors_long$role <- "Professor"
+```
+
+## Combining the Datasets
+
+Now I join both tables together into one big table.
+
+```{r}
+all_responses <- rbind(students_long, professors_long)
+```
+
+## Plotting Bar Charts with Facets
+
+I create bar charts comparing the answers of students and professors, split into small charts for each question using `facet_wrap()`.
+
+```{r}
+ggplot(all_responses, aes(x = answer, fill = role)) +
+  geom_bar(position = "dodge") +
+  facet_wrap(~ question)
+```
+# Part 3 - Side-by-Side Facet Chart
+
+## Adding Respondent Role
+
+First I add a column so we know who is a student and who is a professor.
+
+```{r}
+students_long$role <- "student"
+professors_long$role <- "professor"
+```
+
+## Combining Tables
+
+Next I combine both tables into one table using `rbind()`.
+
+```{r}
+all_responses <- rbind(students_long, professors_long)
+```
+
+## Making the Chart
+
+Here is the side-by-side bar chart split by question using `facet_wrap()`.
+
+```{r, fig.width=10, fig.height=8}
+ggplot(all_responses, aes(x = answer, fill = role)) +
+  geom_bar(position = "dodge") +
+  facet_wrap(~ question) +
+  labs(
+    title = "My side-by-side facet chart",
+    subtitle = "Using facet to show each questions",
+    x = "type_of_response",
+    y = "count_of_response",
+    fill = "respondant"
+  ) +
+  theme(axis.text.x = element_text(angle = 90))
+```
+# Part 4 - Finding the Most Common Answer (Mode)
+
+In this part, we find the answer that appears most often for each question and for each respondent group (students vs. professors).
+
+```{r}
+library(dplyr)
+```
+
+## Step 1: Count Answers by Question, Respondent, and Answer Type
+
+First, we group the combined data and count how many times each answer was given.
+
+```{r}
+answer_counts <- all_responses %>% 
+  group_by(question, role, answer) %>% 
+  summarise(answer_count = n()) %>% 
+  ungroup()
+```
+
+## Step 2: Find the Highest Count for Each Question and Respondent
+
+Now we group by question and role, filter for the maximum count, and rename the columns to match the required output table.
+
+```{r}
+most_common_answers <- answer_counts %>% 
+  group_by(question, role) %>% 
+  filter(answer_count == max(answer_count)) %>% 
+  ungroup() %>% 
+  rename(
+    question_id = question,
+    respondent = role,
+    answer_type = answer
+  )
+
+# Preview the final table
+head(most_common_answers)
+```
