@@ -1,0 +1,210 @@
+---
+title: "Report 1: Survey Data Analysis"
+author: "Igor Donchev"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  message = FALSE, 
+  warning = FALSE
+)
+```
+
+In this project, I am analyzing a survey dataset from a conference in the Netherlands. I will load the data, clean up the column names, count some basic stuff like universities and jobs, fix a bad category column, and make a few plots using ggplot2.
+
+# Loading the tools I need
+
+First, I need to load two packages: tidyverse and janitor.
+
+```{r load-packages}
+library(tidyverse)
+library(janitor)
+```
+
+# Loading and Exploring the Data
+
+## Importing survey data from local folder
+
+```{r load-data}
+# Mistake 1: Using base R read.csv() instead of tidyverse read_csv()
+survey_raw <- read.csv("C:/Users/Валентина Терешкова/Downloads/survey.csv")
+```
+
+## Making column names easier to type with clean_names()
+
+```{r clean-names}
+survey_clean <- survey_raw %>%
+  clean_names()
+```
+
+## Checking how many people took the survey
+
+```{r count-people}
+total_people <- nrow(survey_clean)
+```
+
+## Seeing what kind of data is in each column
+
+```{r inspect-data}
+glimpse(survey_clean)
+```
+
+## Counting people per university
+
+```{r count-universities}
+uni_summary <- survey_clean %>%
+  count(university, name = "total_participants") %>%
+  arrange(desc(total_participants))
+```
+
+## Top 3 schools in a small table
+
+```{r top-3-table}
+top_3_unis <- uni_summary %>%
+  head(3)
+
+knitr::kable(top_3_unis, col.names = c("University Name", "Number of People"))
+```
+
+## Which position appears the most?
+
+I will count the position column to find out what job most participants do.
+
+```{r most-common-job}
+most_common_job <- survey_clean %>%
+  count(position) %>%
+  arrange(desc(n)) %>%
+  slice(1) %>%
+  pull(position)
+```
+
+## Visualizing the job distribution with ggplot2
+
+```{r plot-jobs}
+# Mistake 2: Fixed column name typo (position), but removed label rotation, causing overlapping axis labels
+survey_clean %>%
+  filter(!is.na(position)) %>%
+  ggplot(aes(x = position, fill = position)) +
+  geom_bar() +
+  labs(
+    title = "Count of Participants by Position",
+    subtitle = "Simple breakdown of jobs in the survey",
+    x = "Job Position",
+    y = "How Many People",
+    fill = "Job Title"
+  ) +
+  theme_minimal()
+```
+
+# Fixing the size bins
+
+## Creating size_group based on number_of_employees
+
+```{r create-size-bins}
+# Mistake 3: Overlapping condition order in case_when (<= 50 placed before <= 20)
+survey_fixed_bins <- survey_clean %>%
+  mutate(
+    size_group = case_when(
+      number_of_employees <= 50 ~ "Medium (21-50)",
+      number_of_employees <= 20 ~ "Small (0-20)",
+      number_of_employees <= 200 ~ "Large (51-200)",
+      number_of_employees > 200 ~ "Extra Large (>200)"
+    ),
+    size_group = factor(
+      size_group,
+      levels = c("Small (0-20)", "Medium (21-50)", "Large (51-200)", "Extra Large (>200)")
+    )
+  )
+```
+
+## Which group size appears most often
+
+```{r most-frequent-size}
+top_size_group <- survey_fixed_bins %>%
+  count(size_group) %>%
+  filter(!is.na(size_group)) %>%
+  arrange(desc(n)) %>%
+  slice(1)
+```
+
+## Make a bar graph showing how many research groups fall into each size bin
+
+```{r plot-size-bins}
+survey_fixed_bins %>%
+  filter(!is.na(size_group)) %>%
+  ggplot(aes(x = size_group, fill = size_group)) +
+  geom_bar() +
+  labs(
+    title = "Research Groups by Size",
+    subtitle = "Group size after fixing the category boundaries",
+    x = "Group Size Category",
+    y = "Number of Research Groups",
+    fill = "Category"
+  ) +
+  theme_minimal()
+```
+
+# Calculating percentages for PhDs, Postdocs, and Professors
+
+## Calculating percentages
+
+```{r calculate-percentages}
+survey_percents <- survey_fixed_bins %>%
+  mutate(person_id = row_number()) %>%
+  filter(number_of_employees > 0) %>%
+  mutate(
+    pct_phd = number_of_ph_d_students / number_of_employees,
+    pct_postdoc = number_of_postdocs / number_of_employees,
+    pct_prof = number_of_professors / number_of_employees
+  ) %>%
+  select(person_id, pct_phd, pct_postdoc, pct_prof)
+```
+
+## pivot_longer to plot everything together
+
+```{r pivot-longer-roles}
+survey_long <- survey_percents %>%
+  pivot_longer(
+    cols = c(pct_phd, pct_postdoc, pct_prof),
+    names_to = "role",
+    values_to = "proportion"
+  ) %>%
+  mutate(
+    role = case_when(
+      role == "pct_phd" ~ "PhD Students",
+      role == "pct_postdoc" ~ "Postdocs",
+      role == "pct_prof" ~ "Professors"
+    )
+  )
+```
+
+## Overall average share of PhDs
+
+```{r average-phd-share}
+avg_phd <- survey_long %>%
+  filter(role == "PhD Students") %>%
+  summarise(mean_val = mean(proportion, na.rm = TRUE)) %>%
+  pull(mean_val)
+
+avg_phd_percent <- round(avg_phd * 100, 1)
+```
+
+## Create a horizontal stacked bar chart for each research group
+
+```{r plot-group-composition}
+ggplot(survey_long, aes(x = factor(person_id), y = proportion, fill = role)) +
+  geom_col(position = "fill") +
+  coord_flip() +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    title = "Group Composition Breakdown",
+    subtitle = "Percentage of PhDs, Postdocs, and Professors per group",
+    x = "Group ID",
+    y = "Percentage",
+    fill = "Role"
+  ) +
+  theme_minimal()
+```
