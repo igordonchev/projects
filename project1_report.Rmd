@@ -1,5 +1,5 @@
 ---
-title: "Report 1: Survey Data Analysis"
+title: "Project 1: Rental Market Data Analysis"
 author: "Igor Donchev"
 date: "`r Sys.Date()`"
 output: html_document
@@ -13,198 +13,304 @@ knitr::opts_chunk$set(
 )
 ```
 
-In this project, I am analyzing a survey dataset from a conference in the Netherlands. I will load the data, clean up the column names, count some basic stuff like universities and jobs, fix a bad category column, and make a few plots using ggplot2.
+In this project, I am analyzing a rental dataset scraped from a fake rental agency website. I will scrape the page directly using rvest, clean up column values, convert strings to numbers, create scatterplots and bar charts using ggplot2, run two t-tests, and render an interactive map using leaflet.
 
-# Loading the tools I need
+---
 
-First, I need to load two packages: tidyverse and janitor.
+# Loading Packages
 
 ```{r load-packages}
 library(tidyverse)
+library(rvest)
 library(janitor)
+library(tidygeocoder)
+library(leaflet)
+library(knitr)
+library(broom)
 ```
 
-# Loading and Exploring the Data
+---
 
-## Importing survey data from local folder
+# Data Import and Cleaning
 
-```{r load-data}
-# Mistake 1: Using base R read.csv() instead of tidyverse read_csv()
-survey_raw <- read.csv("C:/Users/Валентина Терешкова/Downloads/survey.csv")
+## Part 1a: Scraping landing page
+
+Passing a clean URL string directly to `read_html()` to extract all listing cards based on `.col-sm` containers.
+
+```{r scrape-rental-site}
+url <- "https://epfl-exts.github.io/rental-scrape/"
+
+page <- read_html(url)
+cards <- html_nodes(page, ".col-sm")
+
+rental_raw <- data.frame(
+  object_type  = html_text(html_node(cards, ".object-type"), trim = TRUE),
+  rooms        = html_text(html_node(cards, ".rooms"), trim = TRUE),
+  price        = html_text(html_node(cards, ".price"), trim = TRUE),
+  address      = html_text(html_node(cards, ".address"), trim = TRUE),
+  living_space = html_text(html_node(cards, ".living-space"), trim = TRUE),
+  floor        = html_text(html_node(cards, ".floor"), trim = TRUE),
+  availability = html_text(html_node(cards, ".availability"), trim = TRUE),
+  stringsAsFactors = FALSE
+)
 ```
 
-## Making column names easier to type with clean_names()
+## Checking dataset dimensions
 
-```{r clean-names}
-survey_clean <- survey_raw %>%
-  clean_names()
+```{r check-dim}
+dim(rental_raw)
 ```
 
-## Checking how many people took the survey
+---
 
-```{r count-people}
-total_people <- nrow(survey_clean)
+## Part 1b: Cleaning column names and converting types
+
+Cleaning column names with `clean_names()` and parsing numeric metrics.
+
+```{r clean-rental-data}
+rental_clean <- clean_names(rental_raw)
+
+# Extracting numeric values into new columns
+rental_clean$price_chf <- parse_number(rental_clean$price)
+rental_clean$living_space_m2 <- parse_number(rental_clean$living_space)
+rental_clean$floor_num <- parse_number(rental_clean$floor)
+rental_clean$rooms_num <- parse_number(rental_clean$rooms)
+rental_clean$postcode_cat <- as.character(parse_number(rental_clean$address))
+
+# Identifying address status
+address_lower <- str_to_lower(rental_clean$address)
+rental_clean$address_status <- ifelse(
+  str_detect(address_lower, "on request") | str_detect(address_lower, "sur demande"),
+  "On Request",
+  "Available"
+)
+
+# Calculating price per square meter
+rental_clean$price_per_m2 <- rental_clean$price_chf / rental_clean$living_space_m2
 ```
 
-## Seeing what kind of data is in each column
+## Inspecting clean dataset structure
 
-```{r inspect-data}
-glimpse(survey_clean)
+```{r inspect-clean}
+glimpse(rental_clean)
 ```
 
-## Counting people per university
+## Checking numerical ranges
 
-```{r count-universities}
-uni_summary <- survey_clean %>%
-  count(university, name = "total_participants") %>%
-  arrange(desc(total_participants))
+```{r check-ranges}
+summary(rental_clean$price_chf)
+summary(rental_clean$living_space_m2)
 ```
 
-## Top 3 schools in a small table
+---
 
-```{r top-3-table}
-top_3_unis <- uni_summary %>%
-  head(3)
+# Exploratory Data Analysis
 
-knitr::kable(top_3_unis, col.names = c("University Name", "Number of People"))
+## Part 2: Scatterplot of price vs living space
+
+```{r plot-price-space}
+ggplot(rental_clean, aes(x = living_space_m2, y = price_chf)) +
+  geom_point(color = "blue", alpha = 0.6, size = 2) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(
+    title = "Price vs Living Space",
+    subtitle = "Relationship between living space and total rent",
+    x = "Living Space (m2)",
+    y = "Price (CHF)"
+  ) +
+  theme_minimal()
 ```
 
-## Which position appears the most?
+---
 
-I will count the position column to find out what job most participants do.
+## Part 3: Bar plot of properties by postcode
 
-```{r most-common-job}
-most_common_job <- survey_clean %>%
-  count(position) %>%
-  arrange(desc(n)) %>%
-  slice(1) %>%
-  pull(position)
-```
-
-## Visualizing the job distribution with ggplot2
-
-```{r plot-jobs}
-# Mistake 2: Fixed column name typo (position), but removed label rotation, causing overlapping axis labels
-survey_clean %>%
-  filter(!is.na(position)) %>%
-  ggplot(aes(x = position, fill = position)) +
+```{r plot-postcodes}
+ggplot(rental_clean, aes(x = postcode_cat, fill = postcode_cat)) +
   geom_bar() +
   labs(
-    title = "Count of Participants by Position",
-    subtitle = "Simple breakdown of jobs in the survey",
-    x = "Job Position",
-    y = "How Many People",
-    fill = "Job Title"
+    title = "Number of Properties by Postcode",
+    subtitle = "Property concentration across areas",
+    x = "Postcode",
+    y = "Count of Properties",
+    fill = "Postcode"
   ) +
   theme_minimal()
 ```
 
-# Fixing the size bins
+---
 
-## Creating size_group based on number_of_employees
+## Part 4: Price vs living space by postcode and floor
 
-```{r create-size-bins}
-# Mistake 3: Overlapping condition order in case_when (<= 50 placed before <= 20)
-survey_fixed_bins <- survey_clean %>%
-  mutate(
-    size_group = case_when(
-      number_of_employees <= 50 ~ "Medium (21-50)",
-      number_of_employees <= 20 ~ "Small (0-20)",
-      number_of_employees <= 200 ~ "Large (51-200)",
-      number_of_employees > 200 ~ "Extra Large (>200)"
-    ),
-    size_group = factor(
-      size_group,
-      levels = c("Small (0-20)", "Medium (21-50)", "Large (51-200)", "Extra Large (>200)")
-    )
-  )
+```{r calc-combos, include=FALSE}
+combo_stats <- rental_clean %>%
+  filter(!is.na(floor_num), !is.na(postcode_cat)) %>%
+  group_by(postcode_cat, floor_num) %>%
+  summarise(mean_p = mean(price_chf, na.rm = TRUE), n_count = n(), .groups = "drop") %>%
+  filter(n_count >= 1) %>%
+  arrange(mean_p)
+
+min_c <- head(combo_stats, 1)
+max_c <- tail(combo_stats, 1)
 ```
 
-## Which group size appears most often
-
-```{r most-frequent-size}
-top_size_group <- survey_fixed_bins %>%
-  count(size_group) %>%
-  filter(!is.na(size_group)) %>%
-  arrange(desc(n)) %>%
-  slice(1)
-```
-
-## Make a bar graph showing how many research groups fall into each size bin
-
-```{r plot-size-bins}
-survey_fixed_bins %>%
-  filter(!is.na(size_group)) %>%
-  ggplot(aes(x = size_group, fill = size_group)) +
-  geom_bar() +
+```{r plot-complex-scatter}
+rental_clean %>%
+  filter(!is.na(floor_num)) %>%
+  ggplot(aes(x = living_space_m2, y = price_chf, color = postcode_cat)) +
+  geom_point() +
+  facet_wrap(~ floor_num) +
   labs(
-    title = "Research Groups by Size",
-    subtitle = "Group size after fixing the category boundaries",
-    x = "Group Size Category",
-    y = "Number of Research Groups",
-    fill = "Category"
+    title = "Price vs Living Space by Floor",
+    subtitle = "Faceted by floor level",
+    x = "Living Space (m2)",
+    y = "Price (CHF)",
+    color = "Postcode"
   ) +
   theme_minimal()
 ```
 
-# Calculating percentages for PhDs, Postdocs, and Professors
+The lowest average cost combination is postcode `r min_c$postcode_cat` on floor `r min_c$floor_num` (mean: CHF `r round(min_c$mean_p, 2)`). The highest average combination is postcode `r max_c$postcode_cat` on floor `r max_c$floor_num` (mean: CHF `r round(max_c$mean_p, 2)`).
 
-## Calculating percentages
+---
 
-```{r calculate-percentages}
-survey_percents <- survey_fixed_bins %>%
-  mutate(person_id = row_number()) %>%
-  filter(number_of_employees > 0) %>%
-  mutate(
-    pct_phd = number_of_ph_d_students / number_of_employees,
-    pct_postdoc = number_of_postdocs / number_of_employees,
-    pct_prof = number_of_professors / number_of_employees
-  ) %>%
-  select(person_id, pct_phd, pct_postdoc, pct_prof)
-```
+# Analysis
 
-## pivot_longer to plot everything together
+## Part 5: Comparing "On Request" vs "Available" addresses
 
-```{r pivot-longer-roles}
-survey_long <- survey_percents %>%
-  pivot_longer(
-    cols = c(pct_phd, pct_postdoc, pct_prof),
-    names_to = "role",
-    values_to = "proportion"
-  ) %>%
-  mutate(
-    role = case_when(
-      role == "pct_phd" ~ "PhD Students",
-      role == "pct_postdoc" ~ "Postdocs",
-      role == "pct_prof" ~ "Professors"
-    )
-  )
-```
+### Price comparison boxplot
 
-## Overall average share of PhDs
-
-```{r average-phd-share}
-avg_phd <- survey_long %>%
-  filter(role == "PhD Students") %>%
-  summarise(mean_val = mean(proportion, na.rm = TRUE)) %>%
-  pull(mean_val)
-
-avg_phd_percent <- round(avg_phd * 100, 1)
-```
-
-## Create a horizontal stacked bar chart for each research group
-
-```{r plot-group-composition}
-ggplot(survey_long, aes(x = factor(person_id), y = proportion, fill = role)) +
-  geom_col(position = "fill") +
-  coord_flip() +
-  scale_y_continuous(labels = scales::percent) +
+```{r boxplot-price}
+ggplot(rental_clean, aes(x = address_status, y = price_chf, fill = address_status)) +
+  geom_boxplot(alpha = 0.5) +
+  geom_jitter(width = 0.1, alpha = 0.3) +
   labs(
-    title = "Group Composition Breakdown",
-    subtitle = "Percentage of PhDs, Postdocs, and Professors per group",
-    x = "Group ID",
-    y = "Percentage",
-    fill = "Role"
+    title = "Price Distribution by Address Status",
+    x = "Address Status",
+    y = "Price (CHF)",
+    fill = "Status"
   ) +
   theme_minimal()
+```
+
+### Living space comparison boxplot
+
+```{r boxplot-space}
+ggplot(rental_clean, aes(x = address_status, y = living_space_m2, fill = address_status)) +
+  geom_boxplot(alpha = 0.5) +
+  geom_jitter(width = 0.1, alpha = 0.3) +
+  labs(
+    title = "Living Space Distribution by Address Status",
+    x = "Address Status",
+    y = "Living Space (m2)",
+    fill = "Status"
+  ) +
+  theme_minimal()
+```
+
+### Floor level comparison boxplot
+
+```{r boxplot-floor}
+ggplot(rental_clean, aes(x = address_status, y = floor_num, fill = address_status)) +
+  geom_boxplot(alpha = 0.5) +
+  geom_jitter(width = 0.1, alpha = 0.3) +
+  labs(
+    title = "Floor Level Distribution by Address Status",
+    x = "Address Status",
+    y = "Floor Number",
+    fill = "Status"
+  ) +
+  theme_minimal()
+```
+
+---
+
+## Part 6: Comparing price per square meter
+
+```{r summary-table-m2}
+rental_valid_m2 <- rental_clean %>%
+  filter(!is.na(price_per_m2), price_per_m2 > 0)
+
+table_m2 <- rental_valid_m2 %>%
+  group_by(address_status) %>%
+  summarise(
+    count = n(),
+    median_val = median(price_per_m2),
+    mean_val = mean(price_per_m2),
+    sd_val = sd(price_per_m2),
+    min_val = min(price_per_m2),
+    max_val = max(price_per_m2)
+  )
+
+kable(table_m2, col.names = c("Status", "N", "Median", "Mean", "SD", "Min", "Max"))
+```
+
+### Welch two-sample t-test (CHF/m2)
+
+```{r ttest-m2}
+ttest_m2 <- t.test(price_per_m2 ~ address_status, data = rental_valid_m2)
+tidy(ttest_m2) %>% kable()
+```
+
+---
+
+## Part 7: Comparing total price (CHF)
+
+```{r summary-table-price}
+rental_valid_price <- rental_clean %>%
+  filter(!is.na(price_chf), price_chf > 0)
+
+table_price <- rental_valid_price %>%
+  group_by(address_status) %>%
+  summarise(
+    count = n(),
+    median_val = median(price_chf),
+    mean_val = mean(price_chf),
+    sd_val = sd(price_chf),
+    min_val = min(price_chf),
+    max_val = max(price_chf)
+  )
+
+kable(table_price, col.names = c("Status", "N", "Median", "Mean", "SD", "Min", "Max"))
+```
+
+### Welch two-sample t-test (Total CHF)
+
+```{r ttest-price}
+ttest_price <- t.test(price_chf ~ address_status, data = rental_valid_price)
+tidy(ttest_price) %>% kable()
+```
+
+---
+
+# Mapping sample addresses
+
+## Part 8: Geocoding and Leaflet map
+
+```{r map-addresses}
+set.seed(123)
+
+sample_avail <- rental_clean %>%
+  filter(address_status == "Available", !is.na(address))
+
+# Sample up to 30 depending on total available count
+sample_n_val <- min(30, nrow(sample_avail))
+
+sample_30 <- sample_avail %>%
+  slice_sample(n = sample_n_val) %>%
+  mutate(full_addr = paste(address, "Switzerland", sep = ", "))
+
+# Geocoding addresses using OpenStreetMap
+geocoded <- sample_30 %>%
+  geocode(address = full_addr, method = "osm", lat = latitude, long = longitude) %>%
+  filter(!is.na(latitude), !is.na(longitude))
+
+# Creating interactive map
+leaflet(geocoded) %>%
+  addTiles() %>%
+  addMarkers(
+    lng = ~longitude, 
+    lat = ~latitude,
+    popup = ~paste0(object_type, "<br>Price: CHF ", price_chf)
+  )
 ```
