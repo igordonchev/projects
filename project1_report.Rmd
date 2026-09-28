@@ -186,8 +186,31 @@ ggplot(rental_clean, aes(x = living_space_m2, y = price_chf)) +
   theme_minimal()
 ```
 
-### My interpretation
-
 Looking at the plot, there is a upward trend—as living space increases, the price generally goes up as well. 
 
  The red trend line confirms that bigger places generally cost more money on average.
+ 
+ ## Part 3: Counting properties by postcode
+
+Here I am creating a bar plot using `ggplot2` to count how many rental listings are located in each postcode area. This will help us see if the agency is more active in certain neighborhoods than others.
+
+```{r plot-postcode-bars}
+library(ggplot2)
+
+ggplot(rental_clean, aes(x = postcode_cat, fill = postcode_cat)) +
+  geom_bar() +
+  labs(
+    title = "Number of Properties by Postcode",
+    x = "Postcode",
+    y = "Number of Properties",
+    fill = "Postcode"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+### My comments
+
+The agency is definitely more active in specific areas
+1207 and 1204. On the other hand, outer areas like 1233, 1234, and have very few listings on the site.
+The agency concentrates most of its business in key central postcodes rather than spreading properties evenly across all regions.
