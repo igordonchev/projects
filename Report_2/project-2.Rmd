@@ -1,0 +1,103 @@
+---
+title: "Project 2: Zurich Politicians Analysis"
+author: "Igor"
+date: "2026-09-30"
+output: html_document
+---
+Introduction
+In this project, I am analyzing the Zurich politicians dataset (zh_politicians.db). The goal is to load the SQLite database, clean up missing values and date formats, combine the main tables, and do basic exploratory analysis to see trends about gender, political parties, and how long mandates last.
+
+Loading the Data
+First, I load the necessary R packages. Then I connect to the SQLite database file in my folder and collect the four main tables (PERSONS, MANDATES, ADDRESSES, and AFFILIATIONS).
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+# Loading packages
+library(DBI)
+library(RSQLite)
+library(tidyverse)
+library(lubridate)
+
+# Setting path to database file
+db_path <- "zh_politicians.db"
+
+# Check if file exists
+if (!file.exists(db_path)) {
+  stop("Error: zh_politicians.db not found! Please check file location.")
+}
+
+# Connect to SQLite
+con <- dbConnect(RSQLite::SQLite(), db_path)
+
+# Download tables into R dataframes
+persons_raw      <- tbl(con, "PERSONS") %>% collect()
+mandates_raw     <- tbl(con, "MANDATES") %>% collect()
+addresses_raw    <- tbl(con, "ADDRESSES") %>% collect()
+affiliations_raw <- tbl(con, "AFFILIATIONS") %>% collect()
+
+# Close connection
+dbDisconnect(con)
+# Loading packages
+library(DBI)
+library(RSQLite)
+library(tidyverse)
+library(lubridate)
+
+# Setting path to database file
+db_path <- "zh_politicians.db"
+
+# Check if file exists
+if (!file.exists(db_path)) {
+  stop("Error: zh_politicians.db not found! Please check file location.")
+}
+
+# Connect to SQLite
+con <- dbConnect(RSQLite::SQLite(), db_path)
+
+# Download tables into R dataframes
+persons_raw      <- tbl(con, "PERSONS") %>% collect()
+mandates_raw     <- tbl(con, "MANDATES") %>% collect()
+addresses_raw    <- tbl(con, "ADDRESSES") %>% collect()
+affiliations_raw <- tbl(con, "AFFILIATIONS") %>% collect()
+
+# Close connection
+dbDisconnect(con)
+```
+
+Data Cleaning and Preparation
+Looking at the raw data, I noticed two main issues:
+
+Empty text values "" need to be changed to NA so R knows they are missing values.
+
+The dates for mandate starts and ends are split into separate day, month, and year columns. I will use make_date() from lubridate to make proper date variables.
+
+```{r clean-data}
+# Cleaning persons table
+persons_clean <- persons_raw %>%
+  mutate(
+    across(where(is.character), ~na_if(., "")),
+    YEAR_OF_DEATH = as.numeric(YEAR_OF_DEATH)
+  )
+
+# Cleaning mandates table and creating real dates
+mandates_clean <- mandates_raw %>%
+  mutate(
+    across(where(is.character), ~na_if(., "")),
+    START_DATE = make_date(MANDATE_START_YEAR, MANDATE_START_MONTH, MANDATE_START_DAY),
+    END_DATE   = make_date(MANDATE_END_YEAR, MANDATE_END_MONTH, MANDATE_END_DAY),
+    DURATION_DAYS = as.numeric(END_DATE - START_DATE)
+  )
+
+# Cleaning affiliations (parties) table
+affiliations_clean <- affiliations_raw %>%
+  mutate(
+    across(where(is.character), ~na_if(., ""))
+  )
+
+# Cleaning addresses table
+addresses_clean <- addresses_raw %>%
+  mutate(
+    across(where(is.character), ~na_if(., ""))
+  )
+  
+```
