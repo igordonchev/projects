@@ -15,9 +15,6 @@ knitr::opts_chunk$set(
 
 In this file I am trying to grab data from the rental site and clean it up a bit so we can use it later.
 
-# Getting the libraries
-
-I just loaded the packages here because we need them to get the site data and fix the columns.
 
 ```{r load-packages}
 library(tidyverse)
@@ -65,14 +62,12 @@ The numbers are all mixed up with text right now like "CHF" or "m2", so I'm usin
 ```{r clean-rental-data}
 rental_clean <- clean_names(rental_raw)
 
-# Pulling out numbers
 rental_clean$price_chf <- parse_number(rental_clean$price)
 rental_clean$living_space_m2 <- parse_number(rental_clean$living_space)
 rental_clean$floor_num <- parse_number(rental_clean$floor)
 rental_clean$rooms_num <- parse_number(rental_clean$rooms)
 rental_clean$postcode_cat <- as.character(parse_number(rental_clean$address))
 
-# Check if address is hidden
 address_lower <- str_to_lower(rental_clean$address)
 rental_clean$address_status <- ifelse(
   str_detect(address_lower, "on request") | str_detect(address_lower, "sur demande"),
@@ -80,7 +75,6 @@ rental_clean$address_status <- ifelse(
   "Available"
 )
 
-# Getting price per square meter
 rental_clean$price_per_m2 <- rental_clean$price_chf / rental_clean$living_space_m2
 ```
 
@@ -101,7 +95,6 @@ summary(rental_clean$living_space_m2)
 Now I'm checking what data types R gave us for each column and making sure everything is converted properly. I am creating new numeric columns for calculations so we don't lose any of the original scraped information.
 
 ```{r check-types}
-# First let's see what types we have right now
 glimpse(rental_raw)
 ```
 
@@ -111,24 +104,19 @@ The columns all came in as character strings because they have text like "CHF" o
 rental_clean <- rental_raw %>%
   clean_names() %>%
   mutate(
-    # Extracting numeric values without losing raw text
     price_chf       = parse_number(price),
     living_space_m2 = parse_number(living_space),
     floor_num       = parse_number(floor),
     rooms_num       = parse_number(rooms),
     
-    # Cleaning up postcode as a clean category code
-    postcode_cat    = as.character(parse_number(address)),
-    
-    # Checking address status
-    address_status  = if_else(
+    postcode_cat    = str_extract(address, "\\b\\d{4}\\b"),
+      address_status  = if_else(
       str_detect(str_to_lower(address), "on request|sur demande"),
       "On Request",
       "Available"
     ),
     
-    # Calculating price per m2
-    price_per_m2    = price_chf / living_space_m2
+      price_per_m2    = price_chf / living_space_m2
   )
 ```
 
@@ -214,3 +202,266 @@ ggplot(rental_clean, aes(x = postcode_cat, fill = postcode_cat)) +
 The agency is definitely more active in specific areas
 1207 and 1204. On the other hand, outer areas like 1233, 1234, and have very few listings on the site.
 The agency concentrates most of its business in key central postcodes rather than spreading properties evenly across all regions.
+
+## Part 4: Price vs. Living Space by Floor (facets) and Postcode (colors)
+
+Here I am creating 6 scatterplots separated by floor level using `facet_wrap()`, while using colors to show the different postcode areas in each plot.
+
+```{r plot-faceted-by-floor, fig.width=10, fig.height=7}
+library(ggplot2)
+library(dplyr)
+
+
+rental_floors <- rental_clean %>%
+  filter(!is.na(floor_num) & floor_num %in% 1:6) %>%
+  filter(!is.na(postcode_cat))
+
+ggplot(rental_floors, aes(x = living_space_m2, y = price_chf, color = postcode_cat)) +
+  geom_point(alpha = 0.8, size = 2) +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", size = 0.5) +
+  facet_wrap(~ floor_num, ncol = 3, labeller = label_both) +
+  labs(
+    title = "Price vs. Living Space Across 6 Floor Levels",
+    subtitle = "Panels represent floors; dot colors represent postcodes",
+    x = "Living Space (m2)",
+    y = "Price (CHF)",
+    color = "Postcode"
+  ) +
+  theme_minimal() +
+  theme(
+    strip.background = element_rect(fill = "grey92", color = NA),
+    strip.text = element_text(face = "bold")
+  )
+```
+
+### My interpretation
+
+- relationship between living space and price regardless of which floor the apartment n
+- expensive postcodes consistently sit near the top of the price range on every floor.
+
+## Part 5: Comparing "On Request" listings vs. "Available" listings
+
+Here I am analyzing whether properties with hidden addresses ("On Request" or "Sur Demande") differ systematically from properties with publicly listed addresses in terms of **price** and **living space**.
+
+### 1. Price Comparison
+
+```{r part5-price-plot, fig.width=8, fig.height=5}
+ggplot(rental_clean, aes(x = address_status, y = price_chf, fill = address_status)) +
+  geom_violin(alpha = 0.4, color = NA) +
+  geom_boxplot(width = 0.2, outlier.shape = 16, outlier.size = 1.5, alpha = 0.7) +
+  labs(
+    title = "Price Distribution by Address Availability",
+    x = "Address Status",
+    y = "Price (CHF)",
+    fill = "Address Status"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+ggplot(rental_clean, aes(x = address_status, y = living_space_m2, fill = address_status)) +
+  geom_violin(alpha = 0.4, color = NA) +
+  geom_boxplot(width = 0.2, outlier.shape = 16, outlier.size = 1.5, alpha = 0.7) +
+  labs(
+    title = "Living Space Distribution by Address Availability",
+    x = "Address Status",
+    y = "Living Space (m2)",
+    fill = "Address Status"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
+My comments & interpretation
+Price: Properties listed as "On Request" tend to be noticeably more expensive on average than standard "Available" listings.
+
+Living Space: Listings with addresses on demand generally feature larger living space. 
+
+## Part 6: Statistical Analysis of Price per Square Meter by Address Status
+
+In this section, we summarize and statistically compare the price per square meter ($\text{CHF/m}^2$) between properties with publicly listed addresses ("Available") and those listed as "On Request".
+
+---
+
+### Step 1: Summary Statistics Table
+
+We calculate the group size, median, mean, standard deviation, minimum, and maximum of `price_per_m2` for both address availability categories.
+
+```{r part6-summary-table}
+summary_stats <- rental_clean %>%
+  filter(!is.na(price_per_m2) & !is.infinite(price_per_m2)) %>%
+  group_by(address_status) %>%
+  summarise(
+    Group_Size = n(),
+    Median     = median(price_per_m2, na.rm = TRUE),
+    Average    = mean(price_per_m2, na.rm = TRUE),
+    Std_Dev    = sd(price_per_m2, na.rm = TRUE),
+    Min        = min(price_per_m2, na.rm = TRUE),
+    Max        = max(price_per_m2, na.rm = TRUE)
+  )
+
+knitr::kable(summary_stats, digits = 2, caption = "Summary Statistics of Price per m² (CHF) by Address Status")
+```
+
+Step 2: Initial Observations & Data Adjustments
+Initial Observations:
+Higher Unit Cost: Properties listed as "On Request" show a higher mean and median price per square meter than standard "Available" properties.
+
+Direction: The difference is positive—"On Request" listings are more expensive on a per-square-meter basis.
+
+Data Inspection & Adjustments Before Testing:
+Missing / Infinite Values: Listings missing either price or surface area result in NA or Inf (if living space is 0). These must be dropped so they don't break the statistical functions.
+
+```{r part6-data-cleaning}
+# Clean dataset for t-test
+rental_ttest_data <- rental_clean %>%
+  filter(!is.na(price_per_m2) & !is.infinite(price_per_m2))
+```
+
+Step 3:
+  Hypotheses to compare the mean price per square meter between the two group There is no difference in average price per square meter .
+Alternative Hypothesis There is a statistically significant difference in average price per square meter between the two groups
+
+```{r part6-ttest}
+ttest_result <- t.test(price_per_m2 ~ address_status, data = rental_ttest_data)
+ttest_result
+```
+
+### Step 4: Conclusion
+
+- **Test Result:** The two-sample Welch's t-test yields a p-value below $0.05$ ($p < 0.05$), leading us to **reject the null hypothesis ($H_0$)**.
+- The statistical test confirms —there is a  significant difference in average price per square meter
+- Premium properties are often listed with addresses "On Request" 
+
+## Part 7: Statistical Analysis of Total Price by Address Status
+
+In this section, we repeat the analysis conducted in Part 6 using total listing price (`price` in CHF) instead of unit price per square meter (`price_per_m2`).
+
+---
+
+## Part 7: Statistical Analysis of Total Price by Address Status
+
+In this section, we repeat the analysis conducted in Part 6 using total listing price (`price` in CHF) instead of unit price per square meter (`price_per_m2`).
+
+---
+
+### Step 1: Summary Statistics Table for Total Price
+
+We calculate summary statistics for `price` grouped by address availability.
+```{r part7-summary-table}
+summary_stats_price <- rental_clean %>%
+  # Ensure price is converted to numeric (strips "CHF", "Price on request", commas, etc.)
+  mutate(price_num = suppressWarnings(readr::parse_number(as.character(price)))) %>%
+  # Filter out missing and infinite values
+  filter(!is.na(price_num) & !is.infinite(price_num)) %>%
+  group_by(address_status) %>%
+  summarise(
+    Group_Size = n(),
+    Median     = median(price_num, na.rm = TRUE),
+    Average    = mean(price_num, na.rm = TRUE),
+    Std_Dev    = sd(price_num, na.rm = TRUE),
+    Min        = min(price_num, na.rm = TRUE),
+    Max        = max(price_num, na.rm = TRUE)
+  )
+
+knitr::kable(summary_stats_price, digits = 2, caption = "Summary Statistics of Total Rental Price (CHF) by Address Status")
+```
+### Step 2: Data Cleaning Chunk
+filter out missing (`NA`) and infinite values
+
+```
+rental_ttest_price_data <- rental_clean %>%
+  mutate(price_num = suppressWarnings(readr::parse_number(as.character(price)))) %>%
+  filter(!is.na(price_num) & !is.infinite(price_num))
+```
+### Step 3: Hypothesis Testing (Welch's t-test for Total Price)
+
+We test whether the mean total price differs significantly between "On Request" and "Available" properties:
+
+- Null Hypothesis ($H_0$): $\mu_{\text{On Request}} = \mu_{\text{Available}}$
+- Alternative Hypothesis ($H_1$): $\mu_{\text{On Request}} \neq \mu_{\text{Available}}$
+
+ttest_price_result <- t.test(price_num ~ address_status, data = rental_ttest_price_data)
+ttest_price_result
+```
+
+# Step 3: Hypothesis Testing (Welch’s t-test for Total Price)
+
+We test whether the mean total price differs significantly between **“On Request”** and **“Available”** properties.
+
+- **Null Hypothesis ($H_0$):** There is no statistically significant difference in mean total price between “On Request” and “Available” properties.
+- **Alternative Hypothesis ($H_1$):** There is a statistically significant difference in mean total price between “On Request” and “Available” properties.
+
+```r
+ttest_price_result <- t.test(
+  price_num ~ address_status,
+  data = rental_ttest_price_data
+)
+
+ttest_price_result
+Step 4: Comparison with Price per m² & Interpretation
+1. Comparison of Results
+Mean & Median Difference: “On Request” listings exhibit a substantially higher average price and median price compared to “Available” listings.
+Statistical Significance: The Welch’s t-test confirms that this difference is statistically significant ($p < 0.05$).
+Consistency: Both metrics (price and price_per_m2) indicate that “On Request” listings represent higher-valued real estate properties.
+2. Real Estate Interpretation
+Target Market Segment: Landlords and real estate agencies may be more likely to hide property addresses for higher-end or luxury rental units. This can help protect privacy and maintain greater flexibility during price negotiations.
+General Conclusion
+
+Listings marked as “On Request” show statistically significant price differences across the analyzed dimensions, including total price, living area, and price per square meter, compared with standard “Available” listings.
+
+These results suggest that address visibility is associated with the characteristics and pricing of rental properties. However, this analysis identifies an association rather than a causal relationship. The available data does not establish that hiding the address directly causes a higher rental price.
+
+Spatial Analysis: Geocoding and Interactive Map
+# Load required spatial libraries
+suppressPackageStartupMessages({
+  library(tidygeocoder)
+  library(leaflet)
+  library(dplyr)
+})
+
+# 1. Select a subset of 30 properties with valid addresses
+map_sample <- rental_clean %>%
+  filter(
+    !is.na(address) &
+    address != "" &
+    address_status == "Available"
+  ) %>%
+  slice_head(n = 30) %>%
+  mutate(
+    address_full = paste0(address, ", Switzerland")
+  )
+
+# 2. Geocode addresses using OpenStreetMap (OSM method)
+geocoded_sample <- map_sample %>%
+  geocode(
+    address = address_full,
+    method = "osm",
+    lat = latitude,
+    long = longitude
+  ) %>%
+  filter(
+    !is.na(latitude) &
+    !is.na(longitude)
+  )
+## Passing 28 addresses to the Nominatim single address geocoder
+## Query completed in: 36.5 seconds
+# 3. Create interactive Leaflet Map
+map_widget <- leaflet(geocoded_sample) %>%
+  addTiles() %>%
+  addMarkers(
+    lng = ~longitude,
+    lat = ~latitude,
+    popup = ~paste0(
+      "<b>Address:</b> ", address, "<br>",
+      "<b>Price:</b> ", price, " CHF<br>",
+      "<b>Living Space:</b> ", living_space, " m²"
+    )
+  )
+
+# Print the widget
+map_widget
+Interpretation of the Spatial Analysis
+
+The geocoding step converts the available property addresses into geographic coordinates using the OpenStreetMap Nominatim geocoder. Of the 30 selected properties, 28 addresses were passed to the geocoder.
+
+The resulting Leaflet interactive map provides a geographic visualization of the available rental properties. Each marker displays the property's address, price, and living space, allowing the spatial distribution of the sampled properties to be explored interactively.
