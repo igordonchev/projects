@@ -384,34 +384,21 @@ ttest_price_result <- t.test(price_num ~ address_status, data = rental_ttest_pri
 ttest_price_result
 ```
 
-# Step 3: Hypothesis Testing (Welch’s t-test for Total Price)
+### Step 4: Comparison with Price per m² & Interpretation
 
-We test whether the mean total price differs significantly between **“On Request”** and **“Available”** properties.
+#### 1. Comparison of Results
+- Mean & Median Difference: "On Request" listings exhibit a substantially higher average price and median price compared to "Available" listings
+- Statistical Significance: The Welch's t-test confirms that this  is statistically significant ($p < 0.05$).
+- Consistency: Both metrics (`price` and `price_per_m2`) confirm that "On Request" listings represent significantly higher-valued real estate properties.
 
-- **Null Hypothesis ($H_0$):** There is no statistically significant difference in mean total price between “On Request” and “Available” properties.
-- **Alternative Hypothesis ($H_1$):** There is a statistically significant difference in mean total price between “On Request” and “Available” properties.
+#### 2. Real Estate Interpretation
+- Target Market Segment: Landlords and real estate agencies tend to hide property addresses "On Request" luxury rental units to protect privacy and maintain price negotiation discret.
 
-```r
-ttest_price_result <- t.test(
-  price_num ~ address_status,
-  data = rental_ttest_price_data
-)
+### General Conclusion
 
-ttest_price_result
-Step 4: Comparison with Price per m² & Interpretation
-1. Comparison of Results
-Mean & Median Difference: “On Request” listings exhibit a substantially higher average price and median price compared to “Available” listings.
-Statistical Significance: The Welch’s t-test confirms that this difference is statistically significant ($p < 0.05$).
-Consistency: Both metrics (price and price_per_m2) indicate that “On Request” listings represent higher-valued real estate properties.
-2. Real Estate Interpretation
-Target Market Segment: Landlords and real estate agencies may be more likely to hide property addresses for higher-end or luxury rental units. This can help protect privacy and maintain greater flexibility during price negotiations.
-General Conclusion
+Listings marked as "On Request" command statistically significant price premiums across all dimensions (total price, living area, and price per square meter) relative to standard "Available" listings
 
-Listings marked as “On Request” show statistically significant price differences across the analyzed dimensions, including total price, living area, and price per square meter, compared with standard “Available” listings.
-
-These results suggest that address visibility is associated with the characteristics and pricing of rental properties. However, this analysis identifies an association rather than a causal relationship. The available data does not establish that hiding the address directly causes a higher rental price.
-
-Spatial Analysis: Geocoding and Interactive Map
+```{r part8-geocoding-map, message=TRUE, warning=FALSE}
 # Load required spatial libraries
 suppressPackageStartupMessages({
   library(tidygeocoder)
@@ -421,30 +408,20 @@ suppressPackageStartupMessages({
 
 # 1. Select a subset of 30 properties with valid addresses
 map_sample <- rental_clean %>%
-  filter(
-    !is.na(address) &
-    address != "" &
-    address_status == "Available"
-  ) %>%
+  filter(!is.na(address) & address != "" & address_status == "Available") %>%
   slice_head(n = 30) %>%
-  mutate(
-    address_full = paste0(address, ", Switzerland")
-  )
+  mutate(address_full = paste0(address, ", Switzerland"))
 
-# 2. Geocode addresses using OpenStreetMap (OSM method)
+# 2. Geocode addresses using OpenStreetMap (osm method)
 geocoded_sample <- map_sample %>%
   geocode(
     address = address_full,
-    method = "osm",
-    lat = latitude,
-    long = longitude
+    method  = "osm",
+    lat     = latitude,
+    long    = longitude
   ) %>%
-  filter(
-    !is.na(latitude) &
-    !is.na(longitude)
-  )
-## Passing 28 addresses to the Nominatim single address geocoder
-## Query completed in: 36.5 seconds
+  filter(!is.na(latitude) & !is.na(longitude))
+
 # 3. Create interactive Leaflet Map
 map_widget <- leaflet(geocoded_sample) %>%
   addTiles() %>%
@@ -460,8 +437,3 @@ map_widget <- leaflet(geocoded_sample) %>%
 
 # Print the widget
 map_widget
-Interpretation of the Spatial Analysis
-
-The geocoding step converts the available property addresses into geographic coordinates using the OpenStreetMap Nominatim geocoder. Of the 30 selected properties, 28 addresses were passed to the geocoder.
-
-The resulting Leaflet interactive map provides a geographic visualization of the available rental properties. Each marker displays the property's address, price, and living space, allowing the spatial distribution of the sampled properties to be explored interactively.

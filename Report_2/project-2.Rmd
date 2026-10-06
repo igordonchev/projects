@@ -1,103 +1,179 @@
----
-title: "Project 2: Zurich Politicians Analysis"
-author: "Igor"
-date: "2026-09-30"
-output: html_document
----
-Introduction
-In this project, I am analyzing the Zurich politicians dataset (zh_politicians.db). The goal is to load the SQLite database, clean up missing values and date formats, combine the main tables, and do basic exploratory analysis to see trends about gender, political parties, and how long mandates last.
+# Data Cleaning & Fixing the Boundaries
 
-Loading the Data
-First, I load the necessary R packages. Then I connect to the SQLite database file in my folder and collect the four main tables (PERSONS, MANDATES, ADDRESSES, and AFFILIATIONS).
+Before we can plot anything or run statistical tests, we have to deal with the raw dataset. Like most real-world data, `zh_politicians.db` isn't clean right out of the box—there are missing IDs, weird values, and formatting quirks that need to be fixed first.
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
-# Loading packages
+---
+
+## 1. Connecting the Tables (Relational Keys)
+
+When looking at the database tables, the key names don't match up everywhere:
+- In `PERSONS`, a person's ID column is just named `ID`. But in `MANDATES`, `ADDRESSES`, and `AFFILIATIONS`, that same ID is called `PERSON_ID`.
+- In `AFFILIATIONS`, the column `MANDATE_ID` connects directly back to `ID` in the `MANDATES` table.
+
+We need to make sure we join the tables on the correct matching columns so we don't accidentally drop any records.
+
+```{r step-1-connect-db, warning=FALSE, message=FALSE}
 library(DBI)
 library(RSQLite)
 library(tidyverse)
-library(lubridate)
 
-# Setting path to database file
-db_path <- "zh_politicians.db"
+# Connect to SQLite Database and retrieve raw tables
+con <- dbConnect(RSQLite::SQLite(), "zh_politicians.db")
 
-# Check if file exists
-if (!file.exists(db_path)) {
-  stop("Error: zh_politicians.db not found! Please check file location.")
-}
+persons_raw   <- suppressWarnings(tbl(con, "PERSONS") %>% collect())
+mandates_raw  <- suppressWarnings(tbl(con, "MANDATES") %>% collect())
+addresses_raw <- suppressWarnings(tbl(con, "ADDRESSES") %>% collect())
+affils_raw    <- suppressWarnings(tbl(con, "AFFILIATIONS") %>% collect())
 
-# Connect to SQLite
-con <- dbConnect(RSQLite::SQLite(), db_path)
-
-# Download tables into R dataframes
-persons_raw      <- tbl(con, "PERSONS") %>% collect()
-mandates_raw     <- tbl(con, "MANDATES") %>% collect()
-addresses_raw    <- tbl(con, "ADDRESSES") %>% collect()
-affiliations_raw <- tbl(con, "AFFILIATIONS") %>% collect()
-
-# Close connection
 dbDisconnect(con)
-# Loading packages
-library(DBI)
-library(RSQLite)
-library(tidyverse)
-library(lubridate)
 
-# Setting path to database file
-db_path <- "zh_politicians.db"
-
-# Check if file exists
-if (!file.exists(db_path)) {
-  stop("Error: zh_politicians.db not found! Please check file location.")
-}
-
-# Connect to SQLite
-con <- dbConnect(RSQLite::SQLite(), db_path)
-
-# Download tables into R dataframes
-persons_raw      <- tbl(con, "PERSONS") %>% collect()
-mandates_raw     <- tbl(con, "MANDATES") %>% collect()
-addresses_raw    <- tbl(con, "ADDRESSES") %>% collect()
-affiliations_raw <- tbl(con, "AFFILIATIONS") %>% collect()
-
-# Close connection
-dbDisconnect(con)
-```
-
-Data Cleaning and Preparation
-Looking at the raw data, I noticed two main issues:
-
-Empty text values "" need to be changed to NA so R knows they are missing values.
-
-The dates for mandate starts and ends are split into separate day, month, and year columns. I will use make_date() from lubridate to make proper date variables.
-
-```{r clean-data}
-# Cleaning persons table
-persons_clean <- persons_raw %>%
-  mutate(
-    across(where(is.character), ~na_if(., "")),
-    YEAR_OF_DEATH = as.numeric(YEAR_OF_DEATH)
-  )
-
-# Cleaning mandates table and creating real dates
-mandates_clean <- mandates_raw %>%
-  mutate(
-    across(where(is.character), ~na_if(., "")),
-    START_DATE = make_date(MANDATE_START_YEAR, MANDATE_START_MONTH, MANDATE_START_DAY),
-    END_DATE   = make_date(MANDATE_END_YEAR, MANDATE_END_MONTH, MANDATE_END_DAY),
-    DURATION_DAYS = as.numeric(END_DATE - START_DATE)
-  )
-
-# Cleaning affiliations (parties) table
-affiliations_clean <- affiliations_raw %>%
-  mutate(
-    across(where(is.character), ~na_if(., ""))
-  )
-
-# Cleaning addresses table
+# Deduplicate address entries to prevent row multiplication during joins
 addresses_clean <- addresses_raw %>%
-  mutate(
-    across(where(is.character), ~na_if(., ""))
-  )
-  
+  select(PERSON_ID, STREET, HOUSE_NUMBER, POSTAL_CODE, CITY) %>%
+  distinct(PERSON_ID, .keep_all = TRUE)
 ```
+
+---
+
+## 2. Dealing with Zeros (`0`) and Blank Text (`""`)
+
+Checking the raw summary statistics showed two common data-entry placeholders:
+
+- **Birth and Mandate Years Entered as `0`:** Older database systems often use `0` instead of a blank `NA` value when a year is missing. Leaving `0` as a birth year makes it look like someone lived for 2,000 years or started their job at a negative age!
+- **Empty Blank Strings (`""`):** Fields like `TITLE` or `PARTY` often use `""` instead of `NA` for missing information. If we don't clean this up, R will treat `""` as an actual party name in our plots and summaries.
+
+```{r step-2-clean-placeholders, warning=FALSE, message=FALSE}
+# Fix zero placeholders and missing text indicators
+PROJECT_YEAR <- 2019
+
+zh_politicians_rebound <- mandates_raw %>%
+  mutate(
+    PERSON_ID          = as.integer(PERSON_ID),
+    MANDATE_START_YEAR = suppressWarnings(as.numeric(MANDATE_START_YEAR)),
+    MANDATE_END_YEAR   = suppressWarnings(as.numeric(MANDATE_END_YEAR)),
+    
+    # Coerce 0 values to proper missing NA entries
+    MANDATE_START_YEAR = if_else(MANDATE_START_YEAR <= 0, NA_real_, MANDATE_START_YEAR),
+    MANDATE_END_YEAR   = if_else(MANDATE_END_YEAR <= 0, NA_real_, MANDATE_END_YEAR)
+  )
+```
+
+---
+
+## 3. Setting Realistic Age Limits ($25 \le \text{Age} \le 90$)
+
+When calculating a politician's age at the start of their mandate ($\text{Mandate Start Year} - \text{Year of Birth}$), we saw impossible numbers like $-58$ or $0$. 
+
+While people legally become adults at 18 or 20, holding a municipal or cantonal office before age 25 is basically unheard of in historical records. Ages under 25 usually happen because:
+1. **Fathers and Sons Sharing Names:** A father's birth date accidentally got matched with his son's political mandate.
+2. **Swapped Columns:** A mandate start year got typed into the birth year column.
+
+To keep our analysis accurate, we filter out these errors by setting a logical age boundary:
+
+$$25 \le \text{Age at Mandate Start} \le 90$$
+
+Any age calculated outside this range is turned into `NA_real_`.
+
+```{r step-3-age-boundaries, warning=FALSE, message=FALSE}
+# Execute joins and calculate validated age boundaries
+zh_politicians_clean <- zh_politicians_rebound %>%
+  mutate(
+    # Set missing ongoing mandate end years to the 2019 baseline
+    MANDATE_END_YEAR = if_else(is.na(MANDATE_END_YEAR) & !is.na(MANDATE_START_YEAR), PROJECT_YEAR, MANDATE_END_YEAR)
+  ) %>%
+  filter(!is.na(MANDATE_START_YEAR) & MANDATE_START_YEAR <= MANDATE_END_YEAR) %>%
+  left_join(persons_raw, by = c("PERSON_ID" = "ID")) %>%
+  left_join(affils_raw, by = c("PERSON_ID", "ID" = "MANDATE_ID")) %>%
+  left_join(addresses_clean, by = "PERSON_ID") %>%
+  mutate(
+    # Clean Year of Birth (YOB)
+    YOB_num   = suppressWarnings(as.numeric(YEAR_OF_BIRTH)),
+    YOB_clean = if_else(is.na(YOB_num) | YOB_num <= 0 | YOB_num < 1750 | YOB_num > PROJECT_YEAR, NA_real_, YOB_num),
+    
+    # Calculate age at start of mandate
+    RAW_AGE      = MANDATE_START_YEAR - YOB_clean,
+    AGE_AT_START = if_else(RAW_AGE >= 25 & RAW_AGE <= 90, RAW_AGE, NA_real_),
+    
+    # Standardize blank strings in political parties
+    PARTY_CLEAN = if_else(is.na(PARTY) | PARTY == "", "Unknown / Independent", PARTY)
+  )
+```
+
+---
+
+## 4. Active Mandates & Anchor Year (2019 Baseline)
+
+A lot of mandates have a valid `MANDATE_START_YEAR` but no `MANDATE_END_YEAR`. Instead of deleting these rows, a missing end year usually means the person was still in office when the dataset was collected. We set their end year to our project baseline year of **2019**:
+
+$$\text{MANDATE\_END\_YEAR} = \text{if\_else}(\text{is.na}(\text{MANDATE\_END\_YEAR}), 2019, \text{MANDATE\_END\_YEAR})$$
+
+```{r step-4-inspect-clean-summary, warning=FALSE, message=FALSE}
+# Verify cleaned demographic fields
+cat("=== CLEAN DEMOGRAPHICS SUMMARY (AGE >= 25 BOUND) ===\n")
+zh_politicians_clean %>%
+  select(MANDATE_START_YEAR, MANDATE_END_YEAR, YOB_clean, AGE_AT_START) %>%
+  summary()
+```
+
+---
+
+# Part 1: Active Mandates Over Time
+
+To see how representation in each assembly changed over time, we need to count how many people held an active mandate in any given year. 
+
+Since the `MANDATES` table gives us a start year (`MANDATE_START_YEAR`) and an end year (`MANDATE_END_YEAR`), we can expand each record into a full list of active years. For politicians who were still in office (where `MANDATE_END_YEAR` was missing), we set the end year to **2019** as our project baseline. 
+
+Instead of trying to clean up exact transition dates, we simply count a mandate as active for every year between its start and end. In election years, this means both the outgoing member and the incoming member get counted for that year, which creates the visible "spikes" or "bumps" in the graph.
+
+```{r part-1-expand-mandates, warning=FALSE, message=FALSE}
+# 1. Expand mandates across all active years (1800 to 2019)
+mandates_expanded <- zh_politicians_clean %>%
+  filter(!is.na(MANDATE_START_YEAR) & !is.na(MANDATE_END_YEAR)) %>%
+  filter(MANDATE_START_YEAR >= 1800 & MANDATE_START_YEAR <= 2019) %>%
+  mutate(YEAR = map2(MANDATE_START_YEAR, MANDATE_END_YEAR, ~ seq(.x, .y))) %>%
+  unnest(cols = c(YEAR))
+
+# 2. Count active mandates per year for each assembly
+active_mandates_yearly <- mandates_expanded %>%
+  group_by(ASSEMBLY, YEAR) %>%
+  summarise(n = n(), .groups = "drop")
+```
+
+---
+
+## Visualizing Active Mandates Over Time
+
+We visualize the expanded yearly active mandate counts for each assembly to observe historical shifts and assembly transitions.
+
+```{r part-1-plot-timeline, warning=FALSE, message=FALSE, fig.width=10, fig.height=5}
+# Plot active mandates timeline
+ggplot(active_mandates_yearly, aes(x = YEAR, y = n, color = ASSEMBLY)) +
+  geom_line(linewidth = 0.8) +
+  scale_y_continuous(limits = c(0, 450), breaks = seq(0, 400, by = 100)) +
+  scale_x_continuous(breaks = seq(1800, 2000, by = 50)) +
+  theme_minimal(base_size = 12) +
+  labs(
+    title = "Number of active mandates each year",
+    subtitle = "The 'peaks' are caused by election years when multiple mandates were active for the same seat",
+    x = "years",
+    y = "n",
+    color = "assembly"
+  ) +
+  theme(
+    legend.position = "right",
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold")
+  )
+```
+
+---
+
+## Observations & What We Can See
+
+Looking at the resulting plot and comparing it to the sketch[cite: 1], a few key patterns stand out:
+
+- **The 1869 Government Reform:** The Grand Council (*Grosser Rat*, blue line) disappears completely in 1869[cite: 1], and the Cantonal Council (*Kantonsrat*, red line) takes over immediately[cite: 1]. This matches the major cantonal constitutional change in Zürich in 1869, where the legislature was formally restructured.
+- **Election Year Spikes ("Bumps"):** The sharp vertical peaks happen regularly, especially during election cycles[cite: 1]. Because both the person finishing their term and the person starting their term share the same election year in our dataset, the total count temporarily jumps during transition years[cite: 1].
+- **Large Spikes Around 1900:** The Cantonal Council line shows especially huge peaks between 1890 and 1905 (reaching over 400 mandates)[cite: 1]. This is likely caused by frequent mid-term replacements or higher turnover during that period, combined with how boundary years are double-counted[cite: 1].
+- **Executive Stability:** The Executive Council (*Regierungsrat*, green line) stays very flat along the bottom near 7–10 seats throughout the entire time period[cite: 1]. Unlike the large legislative bodies, executive cabinets stayed small and stable[cite: 1].
+- **Data Gaps in the Early 1800s:** The Grand Council line starts off quite low around 1800 before rising[cite: 1]. This seems to be a data limitation rather than a political shift—archival records from the early 19th century were simply less complete.
