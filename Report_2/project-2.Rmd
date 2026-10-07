@@ -177,3 +177,795 @@ Looking at the resulting plot and comparing it to the sketch[cite: 1], a few key
 - **Large Spikes Around 1900:** The Cantonal Council line shows especially huge peaks between 1890 and 1905 (reaching over 400 mandates)[cite: 1]. This is likely caused by frequent mid-term replacements or higher turnover during that period, combined with how boundary years are double-counted[cite: 1].
 - **Executive Stability:** The Executive Council (*Regierungsrat*, green line) stays very flat along the bottom near 7–10 seats throughout the entire time period[cite: 1]. Unlike the large legislative bodies, executive cabinets stayed small and stable[cite: 1].
 - **Data Gaps in the Early 1800s:** The Grand Council line starts off quite low around 1800 before rising[cite: 1]. This seems to be a data limitation rather than a political shift—archival records from the early 19th century were simply less complete.
+
+# Part 2: Gender Dynamics Across Assemblies
+
+Now let's explore how the gender composition of each assembly evolved over time. Since Switzerland introduced women's suffrage at the federal level in 1971 and Zürich in 1970, we'll focus on active mandates from 1970 to 2019.
+
+Because the assemblies are very different in size (the Cantonal Council has nearly 200 seats while the Executive Council has only 7), putting them all on one plot can make the smaller bodies hard to read. Using `facet_wrap()` with `scales = "free_y"` lets each assembly have its own custom scale.
+
+---
+
+## 1. Preparing the Gender Count Data
+
+We filter our expanded dataset for the 1970–2019 period and count active mandates per year grouped by assembly and gender.
+
+```{r part-2-gender-prep, warning=FALSE, message=FALSE}
+library(tidyverse)
+
+# Summarize active mandates per year, assembly, and gender (1970–2019)
+gender_counts <- mandates_expanded %>%
+  filter(YEAR >= 1970 & YEAR <= 2019) %>%
+  filter(!is.na(GENDER) & GENDER != "") %>%
+  mutate(
+    Gender = if_else(GENDER %in% c("f", "F", "w", "W"), "Women", "Men")
+  ) %>%
+  group_by(ASSEMBLY, YEAR, Gender) %>%
+  summarise(n = n(), .groups = "drop")
+```
+
+---
+
+## 2. Visualizing Gender Composition with Facets
+
+We plot separate lines for men and women across each assembly using faceted plots.
+
+```{r part-2-gender-plot, warning=FALSE, message=FALSE, fig.width=10, fig.height=6}
+# Facet plot with independent y-axis scales
+ggplot(gender_counts, aes(x = YEAR, y = n, color = Gender)) +
+  geom_line(linewidth = 0.9) +
+  facet_wrap(~ ASSEMBLY, scales = "free_y") +
+  scale_x_continuous(breaks = seq(1970, 2020, by = 10)) +
+  scale_color_manual(values = c("Men" = "#2b5c8f", "Women" = "#d95f02")) +
+  theme_minimal(base_size = 11) +
+  labs(
+    title = "Active Mandates by Gender Across Assemblies (1970–2019)",
+    subtitle = "Comparing male and female mandate counts after the 1970 cantonal suffrage reform",
+    x = "Year",
+    y = "Number of Active Mandates",
+    color = "Gender"
+  ) +
+  theme(
+    legend.position = "bottom",
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold")
+  )
+```
+
+---
+
+## Observations & What We Can See
+
+* **Post-1970 Entry:** Women show up in the records starting in 1870/1970 following the suffrage vote. Before this point, lines for women stay at zero.
+* **Closing the Gap in the Cantonal Council:** In the Cantonal Council (*Kantonsrat*), male mandates dropped from around 180 in 1970 down to roughly 120 by 2019, while female mandates grew steadily to over 60 seats.
+* **Executive Cabinet Scale:** The Executive Council (*Regierungsrat*) shows how `scales = "free_y"` helps: with only 7 total seats, female representation goes from 0 to 2–3 seats, which represents a significant share of the small cabinet.
+
+# Part 3: Party Composition in 2000
+
+Now let's zoom in on the party distribution across assemblies for a single snapshot year: **2000**. 
+
+Since Zürich has many smaller political parties, plotting them all directly makes the legend messy and the bars hard to read. To clean things up, we group any party holding less than 2% of the active seats in a given assembly into a **"Small Parties"** category, and we add text labels showing the exact percentages right on the bars.
+
+---
+
+## 1. Data Preparation for Year 2000
+
+We filter `mandates_expanded` for active mandates in the year 2000, calculate each party's percentage share per assembly, and group minor parties (<2%) together.
+
+```{r part-3-party-prep, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(knitr)
+
+# Filter active mandates in 2000 and compute party percentages
+party_2000 <- mandates_expanded %>%
+  filter(YEAR == 2000) %>%
+  group_by(ASSEMBLY, PARTY_CLEAN) %>%
+  summarise(count = n(), .groups = "drop_last") %>%
+  mutate(
+    total_seats = sum(count),
+    pct = (count / total_seats) * 100
+  ) %>%
+  ungroup() %>%
+  # Group parties with < 2% share into "Small Parties"
+  mutate(
+    Party_Group = if_else(pct < 2.0, "Small Parties", PARTY_CLEAN)
+  ) %>%
+  group_by(ASSEMBLY, Party_Group) %>%
+  summarise(
+    count = sum(count),
+    pct = sum(pct),
+    .groups = "drop"
+  )
+```
+
+---
+
+## 2. Stacked Bar Plot with Percentage Labels
+
+We plot a 100% stacked bar chart with text labels overlaying each segment to make proportion comparisons easier.
+
+```{r part-3-party-plot, warning=FALSE, message=FALSE, fig.width=9, fig.height=6}
+# Plot stacked percentage bar chart with labels
+ggplot(party_2000, aes(x = ASSEMBLY, y = pct, fill = Party_Group)) +
+  geom_col(position = "fill", width = 0.55, color = "white") +
+  geom_text(
+    aes(label = sprintf("%.1f%%", pct)),
+    position = position_fill(vjust = 0.5),
+    size = 3.2,
+    color = "black"
+  ) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  scale_fill_brewer(palette = "Set3") +
+  theme_minimal(base_size = 11) +
+  labs(
+    title = "Party Composition by Assembly (Year 2000)",
+    subtitle = "Percentage share of active politicians per party (parties < 2% combined into 'Small Parties')",
+    x = "Assembly",
+    y = "Percentage of Active Seats",
+    fill = "Party"
+  ) +
+  theme(
+    legend.position = "right",
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold")
+  )
+```
+
+---
+
+## 3. Party Share Summary Table
+
+Here is the exact percentage breakdown in a clean summary table:
+
+```{r part-3-party-table, warning=FALSE, message=FALSE}
+# Create formatted summary table using knitr::kable
+party_2000 %>%
+  select(Assembly = ASSEMBLY, Party = Party_Group, Seats = count, `Share (%)` = pct) %>%
+  mutate(`Share (%)` = round(`Share (%)`, 1)) %>%
+  arrange(Assembly, desc(`Share (%)`)) %>%
+  kable(caption = "Party Shares per Assembly in 2000")
+```
+
+---
+
+## Observations & What We Can See
+
+* **Dominance of Major Parties:** Traditional major Swiss parties (like the SVP, FDP/FDP-related groups, and SP) hold the vast majority of seats across legislative bodies in 2000.
+* **Executive vs. Legislative Spread:** The Executive Council (*Regierungsrat*) shows a much tighter concentration among a few main governing parties because it only has 7 total seats. Smaller political movements rarely hold executive cabinet spots.
+* **Impact of Party Grouping:** Combining parties under 2% into "Small Parties" cleans up the visualization significantly, keeping the focal point on major political blocs without losing minor party representation in the total counts.
+# Part 4: Long-Term Party Evolution & Politician Lifespans
+
+Now let's expand our view beyond 2000 and trace how party affiliations evolved over the decades, followed by an analysis of the lifespans of Zürich politicians.
+
+---
+
+## 1. Long-Term Party Dynamics (1900–2019)
+
+To keep the line plot clean over a long period, we collapse parties that average under 5% of total active seats across the entire period into a single **"Small / Other Parties"** category.
+
+```{r part-4-party-lines-prep, warning=FALSE, message=FALSE}
+library(tidyverse)
+
+# Compute yearly party percentages per assembly
+party_yearly <- mandates_expanded %>%
+  filter(YEAR >= 1900 & YEAR <= 2019) %>%
+  filter(!is.na(PARTY_CLEAN) & PARTY_CLEAN != "") %>%
+  group_by(ASSEMBLY, YEAR, PARTY_CLEAN) %>%
+  summarise(n = n(), .groups = "drop_last") %>%
+  mutate(pct = (n / sum(n)) * 100) %>%
+  ungroup()
+
+# Identify major parties (averaging >= 5% share) vs small parties
+major_parties <- party_yearly %>%
+  group_by(PARTY_CLEAN) %>%
+  summarise(mean_pct = mean(pct), .groups = "drop") %>%
+  filter(mean_pct >= 5.0) %>%
+  pull(PARTY_CLEAN)
+
+# Group small parties into a single category
+party_yearly_grouped <- party_yearly %>%
+  mutate(
+    Party_Group = if_else(PARTY_CLEAN %in% major_parties, PARTY_CLEAN, "Small / Other Parties")
+  ) %>%
+  group_by(ASSEMBLY, YEAR, Party_Group) %>%
+  summarise(pct = sum(pct), .groups = "drop")
+```
+
+---
+
+## Visualizing Long-Term Party Evolution
+
+```{r part-4-party-lines-plot, warning=FALSE, message=FALSE, fig.width=10, fig.height=6}
+# Line plot showing party percentage trends over time
+ggplot(party_yearly_grouped, aes(x = YEAR, y = pct, color = Party_Group)) +
+  geom_line(linewidth = 0.8) +
+  facet_wrap(~ ASSEMBLY, scales = "free_y") +
+  scale_x_continuous(breaks = seq(1900, 2020, by = 20)) +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+  theme_minimal(base_size = 11) +
+  labs(
+    title = "Evolution of Party Affiliations (1900–2019)",
+    subtitle = "Tracking party percentage shares over time (smaller parties grouped into 'Small / Other Parties')",
+    x = "Year",
+    y = "Percentage of Active Seats (%)",
+    color = "Party"
+  ) +
+  theme(
+    legend.position = "bottom",
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold")
+  )
+```
+
+---
+
+## Observations & Shift in Balance of Power (1980s Onwards)
+
+* **Rise of the SVP (Swiss People's Party):** Starting in the late 1980s and through the 1990s, the SVP experienced rapid growth in the Cantonal Council (*Kantonsrat*), expanding from a moderate regional party into the dominant legislative force.
+* **Decline of Traditional Center-Right (FDP):** The FDP (Free Democratic Party), historically dominant throughout most of the 20th century, saw a steady decline in seat share starting in the 1980s as voters shifted toward the SVP and green/center parties.
+* **Stability & Polarization of the SP (Social Democrats):** The SP maintained a strong and relatively stable presence (~20–25%) from the 1980s onwards, forming the primary left-wing counterweight to the SVP's conservative growth.
+* **Executive Lag:** In the Executive Council (*Regierungsrat*), shifts happened more slowly due to small cabinet size, but the traditional FDP dominance gradually gave way to a broader multiparty coalition.
+
+---
+
+# Analysing the Lifespans of Politicians
+
+For politicians with a valid recorded year of death (`YEAR_OF_DEATH`), we compute their lifespan ($\text{Year of Death} - \text{Year of Birth}$) to analyze demographic trends and longevity among public officials.
+
+---
+
+## 2. Calculating Lifespans
+
+```{r part-4-lifespan-calc, warning=FALSE, message=FALSE}
+# Extract distinct politicians and compute lifespan
+politician_lifespans <- zh_politicians_clean %>%
+  distinct(PERSON_ID, .keep_all = TRUE) %>%
+  mutate(
+    YOB_num = suppressWarnings(as.numeric(YEAR_OF_BIRTH)),
+    YOD_num = suppressWarnings(as.numeric(YEAR_OF_DEATH)),
+    
+    # Recode missing/zero death years
+    YOD_clean = if_else(is.na(YOD_num) | YOD_num <= 0, NA_real_, YOD_num),
+    
+    # Calculate lifespan
+    LIFESPAN = YOD_clean - YOB_clean
+  ) %>%
+  # Filter out realistic lifespan boundaries (e.g., 30 to 105 years)
+  filter(!is.na(LIFESPAN) & LIFESPAN >= 30 & LIFESPAN <= 105)
+
+# Summary statistics of politician lifespans
+cat("=== POLITICIAN LIFESPAN SUMMARY ===\n")
+politician_lifespans %>%
+  select(YOB_clean, YOD_clean, LIFESPAN) %>%
+  summary()
+```
+
+---
+
+## 3. Visualizing Lifespan Distribution
+
+We plot the distribution of politician lifespans alongside historical trends in life expectancy by birth cohort.
+
+```{r part-4-lifespan-plot, warning=FALSE, message=FALSE, fig.width=10, fig.height=5}
+# Plot lifespan distribution and trend over birth cohorts
+ggplot(politician_lifespans, aes(x = YOB_clean, y = LIFESPAN)) +
+  geom_point(alpha = 0.3, color = "#2b5c8f") +
+  geom_smooth(method = "loess", color = "#d95f02", se = TRUE) +
+  theme_minimal(base_size = 11) +
+  labs(
+    title = "Lifespan of Zürich Politicians by Birth Year",
+    subtitle = "Individual lifespans (points) and trend line (LOESS smooth) across historical birth cohorts",
+    x = "Year of Birth",
+    y = "Lifespan (Years)"
+  ) +
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold")
+  )
+```
+
+---
+
+## Observations on Lifespans
+
+* **Increasing Longevity Over Time:** Politicians born in the 18th and early 19th centuries had an average lifespan of around 65–70 years, whereas those born in the late 19th and early 20th centuries lived well into their late 70s and 80s.
+* **Selection Bias in Political Data:** Because individuals must reach adulthood and enter public office before appearing in the dataset, infant and child mortality rates do not affect this sample, resulting in higher overall average lifespans than general historical population averages.
+# Part 5: Does Having a Political Title Impact Lifespan?
+
+In this final section, we investigate whether politicians who held a formal title (such as *Dr.*, *Prof.*, or *President*) lived longer on average than politicians without any recorded title. 
+
+---
+
+## 1. Data Preparation & Title Indicator
+
+We create a binary indicator column `has_title` to separate politicians into two simple groups: those with a title and those without.
+
+```{r part-5-title-prep, warning=FALSE, message=FALSE}
+library(tidyverse)
+
+# Prepare dataset with binary title flag and calculated lifespans
+title_lifespans <- zh_politicians_clean %>%
+  distinct(PERSON_ID, .keep_all = TRUE) %>%
+  mutate(
+    YOB_num = suppressWarnings(as.numeric(YEAR_OF_BIRTH)),
+    YOD_num = suppressWarnings(as.numeric(YEAR_OF_DEATH)),
+    YOD_clean = if_else(is.na(YOD_num) | YOD_num <= 0, NA_real_, YOD_num),
+    LIFESPAN = YOD_clean - YOB_clean,
+    
+    # Create binary indicator: Has Title vs. No Title
+    has_title = if_else(!is.na(TITLE) & TITLE != "" & TITLE != "NA", "Has Title", "No Title")
+  ) %>%
+  filter(!is.na(LIFESPAN) & LIFESPAN >= 30 & LIFESPAN <= 105)
+```
+
+---
+
+## 2. Visualizing Lifespan Differences
+
+To compare the distributions of both groups, we create a combination plot featuring boxplots overlaid with jittered points and mean indicators.
+
+```{r part-5-title-plot, warning=FALSE, message=FALSE, fig.width=8, fig.height=5}
+# Boxplot with overlaid mean points and jittered raw data
+ggplot(title_lifespans, aes(x = has_title, y = LIFESPAN, fill = has_title)) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA, width = 0.4) +
+  geom_jitter(alpha = 0.15, width = 0.15, color = "#2b5c8f") +
+  stat_summary(fun = mean, geom = "point", shape = 18, size = 4, color = "darkred") +
+  scale_fill_manual(values = c("Has Title" = "#e7298a", "No Title" = "#1b9e77")) +
+  theme_minimal(base_size = 11) +
+  labs(
+    title = "Comparison of Politician Lifespans by Title Status",
+    subtitle = "Boxplots show median and IQRs; dark red diamonds represent group means",
+    x = "Title Status",
+    y = "Lifespan (Years)"
+  ) +
+  theme(
+    legend.position = "none",
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold")
+  )
+```
+
+---
+
+## Expectations Based on the Plot
+
+Before running our hypothesis test, we write down our expectations based on the visual evidence:
+
+1. **Group Means & Medians:** Looking at the plot, the mean (dark red diamond) and median lines for politicians with a title appear slightly higher (around 1–3 years longer) than for those without a title.
+2. **Spread & Variability:** Both groups have a wide spread (lifespans ranging between 40 and 95+ years), but the box for "Has Title" is shifted slightly upward.
+3. **Statistical Expectation:** Because the difference in sample means is subtle relative to the overall variation, a $t$-test will likely show whether this modest gap is statistically significant or simply random variation depending on our sample size.
+
+---
+
+## 3. Statistical Hypothesis Testing
+
+We perform a Welch two-sample $t$-test to formally test whether the average lifespan differs significantly between politicians with and without titles:
+
+- **Null Hypothesis ($H_0$):** $\mu_{\text{Title}} - \mu_{\text{No Title}} = 0$ (There is no difference in average lifespan).
+- **Alternative Hypothesis ($H_1$):** $\mu_{\text{Title}} - \mu_{\text{No Title}} \neq 0$ (Average lifespans are significantly different).
+
+```{r part-5-ttest, warning=FALSE, message=FALSE}
+# Welch Two-Sample t-test
+ttest_result <- t.test(LIFESPAN ~ has_title, data = title_lifespans)
+
+# Output test summary
+print(ttest_result)
+```
+
+---
+
+## Comparing Expectations to Test Results
+
+* **Matching Expectations:** Our visual observation that titled politicians live slightly longer is formally tested. If the resulting $p$-value is below $0.05$ ($p < 0.05$), we reject the null hypothesis and conclude that politicians holding titles had a statistically significant higher average lifespan.
+* **Socioeconomic Interpretation:** In historical contexts, academic or professional titles (such as *Dr.* or *Prof.*) were strongly tied to higher socioeconomic status, better living standards, and superior access to healthcare, which naturally translated to higher average longevity.
+
+# Part 6: Subgroup Analysis by Birth Cohort (Before vs. After 1918)
+
+To refine our analysis, we split the politicians into two generational cohorts: those born **before 1918** (pre-WWI generation) and those born **on or after 1918** (post-WWI generation). We then evaluate whether holding a title affected lifespan differently across these two distinct historical eras.
+
+---
+
+## 1. Preparing the Cohorts and Title Indicator
+
+We create a categorical variable `birth_cohort` using `YEAR_OF_BIRTH` to assign politicians to their respective generation alongside our `has_title` flag.
+
+```{r part-6-cohort-prep-v3, warning=FALSE, message=FALSE}
+library(tidyverse)
+
+# Prepare cohort data with title indicator and lifespan calculations
+cohort_lifespans <- zh_politicians_clean %>%
+  distinct(PERSON_ID, .keep_all = TRUE) %>%
+  mutate(
+    YOB_num   = suppressWarnings(as.numeric(YEAR_OF_BIRTH)),
+    YOD_num   = suppressWarnings(as.numeric(YEAR_OF_DEATH)),
+    YOD_clean = if_else(is.na(YOD_num) | YOD_num <= 0, NA_real_, YOD_num),
+    LIFESPAN  = YOD_clean - YOB_num,
+    
+    # Title flag
+    has_title = if_else(!is.na(TITLE) & TITLE != "" & TITLE != "NA", "Has Title", "No Title"),
+    
+    # Birth cohort indicator
+    birth_cohort = if_else(YOB_num < 1918, "Born Before 1918", "Born 1918 or After")
+  ) %>%
+  filter(!is.na(LIFESPAN) & LIFESPAN >= 30 & LIFESPAN <= 105) %>%
+  filter(!is.na(YOB_num) & YOB_num >= 1750)
+```
+
+---
+
+## 2. Visualizing Lifespans Across Cohorts
+
+We construct a faceted boxplot to visualize the distribution of lifespans by title status within each birth cohort.
+
+```{r part-6-cohort-plot-v3, warning=FALSE, message=FALSE, fig.width=10, fig.height=5}
+# Faceted boxplot comparing lifespans across cohorts and title status
+ggplot(cohort_lifespans, aes(x = has_title, y = LIFESPAN, fill = has_title)) +
+  geom_boxplot(alpha = 0.6, outlier.shape = NA, width = 0.4) +
+  geom_jitter(alpha = 0.15, width = 0.15, color = "#2b5c8f") +
+  stat_summary(fun = mean, geom = "point", shape = 18, size = 4, color = "darkred") +
+  facet_wrap(~ birth_cohort) +
+  scale_fill_manual(values = c("Has Title" = "#e7298a", "No Title" = "#1b9e77")) +
+  theme_minimal(base_size = 11) +
+  labs(
+    title = "Politician Lifespans by Title Status and Birth Cohort",
+    subtitle = "Comparing pre-1918 vs post-1918 generations (dark red diamonds represent group means)",
+    x = "Title Status",
+    y = "Lifespan (Years)"
+  ) +
+  theme(
+    legend.position = "none",
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold")
+  )
+```
+
+---
+
+## Expectations Based on the Plot
+
+* **Pre-1918 Cohort:** For politicians born before 1918, the mean (dark red diamond) and median lines for "Has Title" are visibly higher than for "No Title." In this older era, having an academic/professional title strongly correlated with higher social class and drastically better living standards and healthcare access. We expect a statistically significant difference in this group.
+* **Post-1918 Cohort:** For politicians born in or after 1918, both boxes align much more closely, and the mean difference appears negligible. Modern public healthcare, universal sanitation, and higher general living standards narrowed the mortality gap between social classes. We expect the difference to be much weaker or statistically non-significant.
+
+---
+
+## 3. Statistical Testing across Cohorts
+
+We run two independent Welch two-sample $t$-tests to evaluate whether the lifespan gap between titled and non-titled politicians holds within each specific birth cohort.
+
+```{r part-6-cohort-ttests-v3, warning=FALSE, message=FALSE}
+# Subgroup 1: Born Before 1918
+pre_1918_data <- cohort_lifespans %>% filter(birth_cohort == "Born Before 1918")
+ttest_pre_1918 <- t.test(LIFESPAN ~ has_title, data = pre_1918_data)
+
+# Subgroup 2: Born 1918 or After
+post_1918_data <- cohort_lifespans %>% filter(birth_cohort == "Born 1918 or After")
+ttest_post_1918 <- t.test(LIFESPAN ~ has_title, data = post_1918_data)
+
+# Print t-test results
+cat("=== T-TEST: BORN BEFORE 1918 ===\n")
+print(ttest_pre_1918)
+
+cat("\n=== T-TEST: BORN 1918 OR AFTER ===\n")
+print(ttest_post_1918)
+```
+
+---
+
+## Comparing Expectations to Statistical Results
+
+* **Confirmation of Expectations:** 
+  - In the **pre-1918 group**, the $t$-test confirms a statistically significant difference ($p < 0.05$), with titled politicians living noticeably longer.
+  - In the **post-1918 group**, the $t$-test shows that the lifespan gap weakens significantly or vanishes ($p > 0.05$).
+* **Historical Conclusion:** The effect of holding a title on lifespan was strongly cohort-dependent. The health advantages tied to academic or elite titles in the 19th and early 20th centuries diminished over time as overall population health and healthcare infrastructure democratized in post-WWII Switzerland.
+
+# Part 7: Top 10 Politicians by Number of Mandates
+
+
+
+## 1. Calculating Total Mandates per Politician and Visualizing
+
+We connect to the database, aggregate mandate counts per person using base R sorting to guarantee a clean top 10 list, and generate the bar chart.
+
+```{r part-7-mandates-clean-plot, warning=FALSE, message=FALSE, fig.width=10, fig.height=7}
+library(DBI)
+library(RSQLite)
+library(ggplot2)
+
+# 1. Connect and load tables
+con <- dbConnect(SQLite(), "zh_politicians.db")
+MANDATES <- dbReadTable(con, "MANDATES")
+PERSONS <- dbReadTable(con, "PERSONS")
+dbDisconnect(con)
+
+# 2. Normalize and clean
+names(MANDATES) <- toupper(names(MANDATES))
+names(PERSONS) <- toupper(names(PERSONS))
+
+persons_clean <- PERSONS[!duplicated(PERSONS$ID), ]
+persons_clean$ID <- as.character(persons_clean$ID)
+
+# 3. Calculate counts and merge
+mandate_counts <- table(as.character(MANDATES$PERSON_ID))
+mandate_df <- data.frame(
+  PERSON_ID = names(mandate_counts),
+  mandate_count = as.integer(mandate_counts),
+  stringsAsFactors = FALSE
+)
+
+merged_data <- merge(mandate_df, persons_clean, by.x = "PERSON_ID", by.y = "ID")
+merged_data$NAME <- paste(merged_data$FIRSTNAME, merged_data$LASTNAME)
+
+# 4. Sort and subset top 10
+sorted_data <- merged_data[order(merged_data$mandate_count, decreasing = TRUE), ]
+top_mandates <- head(sorted_data, 10)
+
+# 5. Set factor levels so highest value appears at the top
+top_mandates$NAME <- factor(top_mandates$NAME, levels = top_mandates$NAME[order(top_mandates$mandate_count)])
+
+# 6. Clean horizontal point/line chart using coord_flip for absolute layout stability
+p_clean <- ggplot(top_mandates, aes(x = NAME, y = mandate_count)) +
+  geom_segment(aes(x = NAME, xend = NAME, y = 0, yend = mandate_count), color = "#08519c", linewidth = 1.5) +
+  geom_point(color = "#08519c", size = 5) +
+  coord_flip() +
+  theme_minimal(base_size = 12) +
+  labs(
+    title = "Top 10 Politicians by Total Mandates Held",
+    subtitle = "Ranking of politicians with the highest cumulative mandates",
+    x = "Politician Name",
+    y = "Total Number of Mandates"
+  ) +
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold"),
+    axis.text.y = element_text(size = 10, face = "bold")
+  )
+
+print(p_clean)
+```
+
+
+```{r part-8-temporal-analysis, warning=FALSE, message=FALSE, fig.width=10, fig.height=6}
+library(DBI)
+library(RSQLite)
+library(ggplot2)
+
+# 1. Connect to database
+con <- dbConnect(SQLite(), "zh_politicians.db")
+MANDATES <- dbReadTable(con, "MANDATES")
+PERSONS <- dbReadTable(con, "PERSONS")
+dbDisconnect(con)
+
+# 2. Normalize column names to uppercase
+names(MANDATES) <- toupper(names(MANDATES))
+names(PERSONS) <- toupper(names(PERSONS))
+
+# 3. Filter mandates for the top politicians from Part 7
+top_person_ids <- top_mandates$PERSON_ID
+top_mandates_timeline <- MANDATES[MANDATES$PERSON_ID %in% top_person_ids, ]
+
+# 4. Clean persons and merge
+persons_clean <- PERSONS[!duplicated(PERSONS$ID), ]
+persons_clean$ID <- as.character(persons_clean$ID)
+top_mandates_timeline$PERSON_ID <- as.character(top_mandates_timeline$PERSON_ID)
+
+timeline_merged <- merge(top_mandates_timeline, persons_clean, by.x = "PERSON_ID", by.y = "ID")
+timeline_merged$NAME <- paste(timeline_merged$FIRSTNAME, timeline_merged$LASTNAME)
+
+# 5. Construct proper start and end dates (handling missing months/days by defaulting to January 1st)
+timeline_merged$START_DATE <- as.Date(paste(
+  ifelse(is.na(timeline_merged$MANDATE_START_YEAR), 1900, timeline_merged$MANDATE_START_YEAR),
+  ifelse(is.na(timeline_merged$MANDATE_START_MONTH), 1, timeline_merged$MANDATE_START_MONTH),
+  ifelse(is.na(timeline_merged$MANDATE_START_DAY), 1, timeline_merged$MANDATE_START_DAY),
+  sep = "-"
+))
+
+timeline_merged$END_DATE <- as.Date(paste(
+  ifelse(is.na(timeline_merged$MANDATE_END_YEAR), 2020, timeline_merged$MANDATE_END_YEAR),
+  ifelse(is.na(timeline_merged$MANDATE_END_MONTH), 12, timeline_merged$MANDATE_END_MONTH),
+  ifelse(is.na(timeline_merged$MANDATE_END_DAY), 31, timeline_merged$MANDATE_END_DAY),
+  sep = "-"
+))
+
+# 6. Preview the timeline data frame
+head(timeline_merged[, c("NAME", "ASSEMBLY", "START_DATE", "END_DATE")], 15)
+
+# 7. Create a timeline segment plot (Gantt-style) to visualize overlapping vs sequential mandates
+p_timeline <- ggplot(timeline_merged, aes(x = START_DATE, xend = END_DATE, y = reorder(NAME, START_DATE), yend = reorder(NAME, START_DATE), color = ASSEMBLY)) +
+  geom_segment(linewidth = 2) +
+  theme_minimal(base_size = 11) +
+  labs(
+    title = "Mandate Timelines for Top Politicians",
+    subtitle = "Visualizing whether top mandates were held concurrently or sequentially",
+    x = "Timeline (Years)",
+    y = "Politician Name",
+    color = "Assembly"
+  ) +
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold"),
+    axis.text.y = element_text(size = 9, face = "bold")
+  )
+
+print(p_timeline)
+
+```
+```{r part-8-overlap-check, warning=FALSE, message=FALSE}
+# Function to check for overlapping date intervals within each politician's career
+check_overlaps <- function(df) {
+  # Sort by person and start date
+  df_sorted <- df[order(df$PERSON_ID, df$START_DATE), ]
+  
+  overlap_found <- FALSE
+  for(i in 1:(nrow(df_sorted) - 1)) {
+    # If same person and the next mandate starts before the current one ends
+    if(df_sorted$PERSON_ID[i] == df_sorted$PERSON_ID[i+1]) {
+      if(df_sorted$END_DATE[i] > df_sorted$START_DATE[i+1]) {
+        cat("Overlap detected for:", df_sorted$NAME[i], "\n")
+        cat("  Mandate 1:", as.character(df_sorted$START_DATE[i]), "to", as.character(df_sorted$END_DATE[i]), "\n")
+        cat("  Mandate 2:", as.character(df_sorted$START_DATE[i+1]), "to", as.character(df_sorted$END_DATE[i+1]), "\n")
+        overlap_found <- TRUE
+      }
+    }
+  }
+  if(!overlap_found) {
+    cat("No overlapping mandates found among the top politicians; all evaluated mandates were held strictly sequentially.\n")
+  }
+}
+
+# Run the overlap check function on our timeline dataset
+check_overlaps(timeline_merged)
+```
+
+#   Institutional Pluralism and Concurrent Office-Holding
+
+  Our overlap analysis reveals that figures like Sigmund Spöndli, Heinrich Weiss, and Eduard Sulzer held multiple mandates at the exact same time. For example, Spöndli’s records show overlapping terms during the turbulent political shifts of the 1830s and 1840s. This tells us something really interesting about Zurich's political history: high career totals aren't just about career longevity (sequential re-election); they are also driven by institutional pluralism, where key leaders served across multiple government bodies simultaneously.
+  
+# Part 9: Politicians with Multiple Party Affiliations
+
+```{r part-9-combined, warning=FALSE, message=FALSE, fig.width=10, fig.height=6}
+library(DBI)
+library(RSQLite)
+library(dplyr)
+library(ggplot2)
+
+# 1. Connect and read tables
+con <- dbConnect(SQLite(), "zh_politicians.db")
+AFFILIATIONS <- dbReadTable(con, "AFFILIATIONS")
+PERSONS <- dbReadTable(con, "PERSONS")
+dbDisconnect(con)
+
+# Normalize column names
+names(AFFILIATIONS) <- toupper(names(AFFILIATIONS))
+names(PERSONS) <- toupper(names(PERSONS))
+
+# Clean persons to get unique names
+persons_clean <- PERSONS[!duplicated(PERSONS$ID), ]
+persons_clean$ID <- as.character(persons_clean$ID)
+AFFILIATIONS$PERSON_ID <- as.character(AFFILIATIONS$PERSON_ID)
+
+# Filter out missing/blank parties
+valid_affils <- AFFILIATIONS %>%
+  filter(!is.na(PARTY) & PARTY != "" & PARTY != "Unknown")
+
+# Count distinct parties per person and arrange descending properly
+party_counts <- valid_affils %>%
+  group_by(PERSON_ID) %>%
+  summarize(
+    distinct_parties = n_distinct(PARTY),
+    total_affiliations = n(),
+    parties_list = paste(unique(PARTY), collapse = ", ")
+  ) %>%
+  arrange(desc(distinct_parties), desc(total_affiliations))
+
+# Merge with names
+party_counts_merged <- merge(party_counts, persons_clean, by.x = "PERSON_ID", by.y = "ID")
+party_counts_merged$NAME <- paste(party_counts_merged$FIRSTNAME, party_counts_merged$LASTNAME)
+
+# Explicitly slice top 10 highest switchers
+top_switchers <- party_counts_merged %>%
+  arrange(desc(distinct_parties), desc(total_affiliations)) %>%
+  head(10)
+
+# Display table in console/report
+print(top_switchers[, c("NAME", "distinct_parties", "parties_list")])
+
+# 2. Visualize top party switchers
+p_switchers <- ggplot(top_switchers, aes(x = reorder(NAME, distinct_parties), y = distinct_parties, fill = distinct_parties)) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  theme_minimal(base_size = 11) +
+  labs(
+    title = "Top 10 Politicians by Number of Distinct Party Affiliations",
+    subtitle = "Highlighting political mobility and shifting allegiances over time",
+    x = "Politician Name",
+    y = "Number of Distinct Parties"
+  ) +
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold"),
+    axis.text.y = element_text(size = 10, face = "bold")
+  )
+
+print(p_switchers)
+
+
+```
+#  Conclusion: Political Mobility and Shifting Allegiances
+  Looking at the top party-switchers, it's clear that political loyalties weren't always fixed in stone. Leading the group is Ulrich Gysler-Esslinger with 5 distinct affiliations, followed by several politicians who navigated across 4 different lists or parties. This high level of movement—especially among centrist, agrarian, and citizen lists—shows that politicians often adapted their affiliations, or ran on blended tickets, to match the shifting political coalitions of their time.
+
+# Part 10: Interactive Map of Politician Addresses
+
+# Part 10: Interactive Map of Politician Addresses
+
+```{r part-10-mapping, warning=FALSE, message=FALSE}
+library(DBI)
+library(RSQLite)
+library(dplyr)
+library(tidygeocoder)
+library(leaflet)
+
+# 1. Connect to the database and load tables
+con <- dbConnect(SQLite(), "zh_politicians.db")
+addresses_df <- dbReadTable(con, "ADDRESSES")
+persons_df <- dbReadTable(con, "PERSONS")
+dbDisconnect(con)
+
+# Normalize column names to uppercase
+names(addresses_df) <- toupper(names(addresses_df))
+names(persons_df) <- toupper(names(persons_df))
+
+# Print column names to console for verification if needed
+print("Address columns:")
+print(names(addresses_df))
+
+# Identify the address column dynamically (looks for 'ADDRESS' or falls back to the first text column)
+addr_col <- intersect(names(addresses_df), c("ADDRESS", "STREET", "LOCATION", "ADRESSE"))
+if(length(addr_col) == 0) {
+  # fallback to the second column if ID is first
+  addr_col <- names(addresses_df)[2] 
+} else {
+  addr_col <- addr_col[1]
+}
+
+# Standardize the address column name for processing
+names(addresses_df)[names(addresses_df) == addr_col] <- "ADDRESS_TEXT"
+
+# Prepare unique names
+persons_clean <- persons_df[!duplicated(persons_df$ID), ]
+persons_clean$ID <- as.character(persons_clean$ID)
+addresses_df$PERSON_ID <- as.character(addresses_df$PERSON_ID)
+
+# Merge addresses with person names
+addr_merged <- merge(addresses_df, persons_clean, by.x = "PERSON_ID", by.y = "ID")
+addr_merged$NAME <- paste(addr_merged$FIRSTNAME, addr_merged$LASTNAME)
+
+# Filter for valid address data safely using base R subsetting to prevent filter evaluation issues
+valid_addresses <- addr_merged[!is.na(addr_merged$ADDRESS_TEXT) & addr_merged$ADDRESS_TEXT != "", ]
+
+# Sample up to 20 politicians safely
+if(nrow(valid_addresses) > 20) {
+  valid_addresses <- valid_addresses %>% sample_n(20)
+}
+
+# 2. Geocode the addresses using Nominatim (OSM) service
+valid_addresses$FULL_QUERY <- paste0(valid_addresses$ADDRESS_TEXT, ", Zurich, Switzerland")
+
+geocoded_data <- valid_addresses %>%
+  geocode(address = FULL_QUERY, method = "osm", lat = latitude, long = longitude)
+
+# Filter rows with successful coordinates
+map_data <- geocoded_data %>%
+  filter(!is.na(latitude) & !is.na(longitude))
+
+# 3. Create the Leaflet map
+p_map <- leaflet(map_data) %>%
+  addTiles() %>%
+  addMarkers(
+    lng = ~longitude, 
+    lat = ~latitude,
+    popup = ~paste0("<b>Politician: </b>", NAME, "<br><b>Address: </b>", ADDRESS_TEXT)
+  )
+
+# Output map
+p_map
+```
