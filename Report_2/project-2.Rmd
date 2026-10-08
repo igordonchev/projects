@@ -893,7 +893,6 @@ print(p_switchers)
 #  Conclusion: Political Mobility and Shifting Allegiances
   Looking at the top party-switchers, it's clear that political loyalties weren't always fixed in stone. Leading the group is Ulrich Gysler-Esslinger with 5 distinct affiliations, followed by several politicians who navigated across 4 different lists or parties. This high level of movement—especially among centrist, agrarian, and citizen lists—shows that politicians often adapted their affiliations, or ran on blended tickets, to match the shifting political coalitions of their time.
 
-# Part 10: Interactive Map of Politician Addresses
 
 # Part 10: Interactive Map of Politician Addresses
 

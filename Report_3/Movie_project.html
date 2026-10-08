@@ -427,7 +427,59 @@ print(df_coactors)</code></pre>
 ## # ℹ 8 more variables: overview &lt;chr&gt;, popularity &lt;dbl&gt;, poster_path &lt;chr&gt;,
 ## #   release_date &lt;chr&gt;, softcore &lt;lgl&gt;, video &lt;lgl&gt;, vote_average &lt;dbl&gt;,
 ## #   vote_count &lt;int&gt;</code></pre>
+<p>The API output successfully retrieved 3 shared films where both Will
+Ferrell and Liam Neeson are credited:</p>
+<p>The Lego Movie (2014)</p>
+<p>Daddy’s Home 2 (2017)</p>
+<p>Anchorman 2: The Legend Continues (2013)</p>
+<pre class="r"><code>query_params_cert &lt;- list(
+  api_key = api_key,
+  with_cast = &quot;500&quot;,
+  certification_country = &quot;US&quot;,
+  certification.lte = &quot;G&quot;
+)
+
+response_cert &lt;- GET(target_url, query = query_params_cert)
+data_cert &lt;- fromJSON(content(response_cert, &quot;text&quot;, encoding = &quot;UTF-8&quot;), flatten = TRUE)
+
+df_cert &lt;- as_tibble(data_cert$results)
+print(df_cert)</code></pre>
+<pre><code>## # A tibble: 7 × 15
+##   adult backdrop_path    genre_ids     id title original_language original_title
+##   &lt;lgl&gt; &lt;chr&gt;            &lt;list&gt;     &lt;int&gt; &lt;chr&gt; &lt;chr&gt;             &lt;chr&gt;         
+## 1 FALSE /aC6wW62V6b0csr… &lt;int [3]&gt; 3.45e2 Eyes… en                Eyes Wide Shut
+## 2 FALSE /xO49rCWgTAsxxO… &lt;int [1]&gt; 1.75e6 9/11… en                9/11: United …
+## 3 FALSE /uIx2pA44jPJVpv… &lt;int [2]&gt; 3.61e4 Trop… en                Tropic Thunde…
+## 4 FALSE /9mOXEpXUyzTtmg… &lt;int [1]&gt; 7.66e5 Tom … en                Tom Cruise: A…
+## 5 FALSE /kfyLvdWaXlvXWS… &lt;int [1]&gt; 1.82e4 Spac… en                Space Station…
+## 6 FALSE /xdXhovlbfNsnxz… &lt;int [1]&gt; 1.23e6 In t… en                In the Shadow…
+## 7 FALSE &lt;NA&gt;             &lt;int [3]&gt; 2.98e5 Time… en                Time Out: The…
+## # ℹ 8 more variables: overview &lt;chr&gt;, popularity &lt;dbl&gt;, poster_path &lt;chr&gt;,
+## #   release_date &lt;chr&gt;, softcore &lt;lgl&gt;, video &lt;lgl&gt;, vote_average &lt;dbl&gt;,
+## #   vote_count &lt;int&gt;</code></pre>
+<p>This confirms that Tom Cruise does not have a traditional G-rated
+family filmography.</p>
 </div>
+</div>
+<div id="finding-pixars-company-id" class="section level2">
+<h2>Finding Pixar’s Company ID</h2>
+<p>To find Pixar’s unique identification number, we query the TMDb
+company search endpoint and extract the ID programmatically from the
+results data frame.</p>
+<pre class="r"><code># Query TMDb search/company endpoint for Pixar
+search_url &lt;- &quot;https://api.themoviedb.org/3/search/company&quot;
+query_params_company &lt;- list(
+  api_key = api_key,
+  query = &quot;Pixar&quot;
+)
+
+response_company &lt;- GET(search_url, query = query_params_company)
+data_company &lt;- fromJSON(content(response_company, &quot;text&quot;, encoding = &quot;UTF-8&quot;), flatten = TRUE)
+
+# Extract the company ID for Pixar
+pixar_id &lt;- data_company$results$id[data_company$results$name == &quot;Pixar&quot;]
+print(pixar_id)</code></pre>
+<pre><code>## [1] 3</code></pre>
 </div>
 
 

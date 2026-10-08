@@ -44,3 +44,52 @@ df_coactors <- as_tibble(data_coactors$results)
 print(df_coactors)
 ```
 
+The API output successfully retrieved 3 shared films where both Will Ferrell and Liam Neeson are credited:
+
+The Lego Movie (2014)
+
+Daddy's Home 2 (2017)
+
+Anchorman 2: The Legend Continues (2013)
+
+
+
+```{r}
+query_params_cert <- list(
+  api_key = api_key,
+  with_cast = "500",
+  certification_country = "US",
+  certification.lte = "G"
+)
+
+response_cert <- GET(target_url, query = query_params_cert)
+data_cert <- fromJSON(content(response_cert, "text", encoding = "UTF-8"), flatten = TRUE)
+
+df_cert <- as_tibble(data_cert$results)
+print(df_cert)
+```
+
+This confirms that Tom Cruise does not have a traditional G-rated family filmography.
+
+
+
+
+##  Finding Pixar's Company ID
+
+To find Pixar's unique identification number, we query the TMDb company search endpoint and extract the ID programmatically from the results data frame.
+
+```{r}
+# Query TMDb search/company endpoint for Pixar
+search_url <- "https://api.themoviedb.org/3/search/company"
+query_params_company <- list(
+  api_key = api_key,
+  query = "Pixar"
+)
+
+response_company <- GET(search_url, query = query_params_company)
+data_company <- fromJSON(content(response_company, "text", encoding = "UTF-8"), flatten = TRUE)
+
+# Extract the company ID for Pixar
+pixar_id <- data_company$results$id[data_company$results$name == "Pixar"]
+print(pixar_id)
+```
