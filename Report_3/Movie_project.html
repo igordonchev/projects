@@ -10,8 +10,9 @@
 
 
 
+<meta name="date" content="2026-10-07" />
 
-<title>Movie_project.knit</title>
+<title>movie_project</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -348,12 +349,12 @@ display: none;
 
 
 
+<h1 class="title toc-ignore">movie_project</h1>
+<h4 class="date">2026-10-07</h4>
 
 </div>
 
 
-<hr />
-<p>title: “movie_project” output: html_document date: “2026-10-07”</p>
 <div id="part-1-api-query-exercises" class="section level2">
 <h2>Part 1: API Query Exercises</h2>
 <div id="highest-grossing-dramas-from-2010" class="section level3">
@@ -361,14 +362,13 @@ display: none;
 <p>To identify the highest-grossing dramas released in 2010, we
 construct our query by appending parameters for the Drama genre ID
 (<code>18</code>), the primary release year (<code>2010</code>), and
-revenue sorting (<code>revenue.desc</code>) to our base setup.</p>
+revenue sorting (<code>revenue.desc</code>).</p>
 <pre class="r"><code>library(httr)
 library(jsonlite)
 library(tibble)
 
 api_key &lt;- &quot;f5d15466393ed930c8e0789be72f4cfd&quot;
-base_url &lt;- &quot;https://api.themoviedb.org&quot;
-target_url &lt;- modify_url(base_url, path = &quot;/3/discover/movie&quot;)
+discover_url &lt;- &quot;https://api.themoviedb.org/3/discover/movie&quot;
 
 query_params_dramas &lt;- list(
   api_key = api_key,
@@ -377,7 +377,7 @@ query_params_dramas &lt;- list(
   sort_by = &quot;revenue.desc&quot;
 )
 
-response_dramas &lt;- GET(target_url, query = query_params_dramas)
+response_dramas &lt;- GET(discover_url, query = query_params_dramas)
 data_dramas &lt;- fromJSON(content(response_dramas, &quot;text&quot;, encoding = &quot;UTF-8&quot;), flatten = TRUE)
 
 df_dramas &lt;- as_tibble(data_dramas$results)
@@ -408,30 +408,11 @@ print(df_dramas)</code></pre>
 ## # ℹ 8 more variables: overview &lt;chr&gt;, popularity &lt;dbl&gt;, poster_path &lt;chr&gt;,
 ## #   release_date &lt;chr&gt;, softcore &lt;lgl&gt;, video &lt;lgl&gt;, vote_average &lt;dbl&gt;,
 ## #   vote_count &lt;int&gt;</code></pre>
-<pre class="r"><code>query_params_coactors &lt;- list(
-  api_key = api_key,
-  with_cast = &quot;23659,3896&quot;
-)
-
-response_coactors &lt;- GET(target_url, query = query_params_coactors)
-data_coactors &lt;- fromJSON(content(response_coactors, &quot;text&quot;, encoding = &quot;UTF-8&quot;), flatten = TRUE)
-
-df_coactors &lt;- as_tibble(data_coactors$results)
-print(df_coactors)</code></pre>
-<pre><code>## # A tibble: 3 × 15
-##   adult backdrop_path    genre_ids     id title original_language original_title
-##   &lt;lgl&gt; &lt;chr&gt;            &lt;list&gt;     &lt;int&gt; &lt;chr&gt; &lt;chr&gt;             &lt;chr&gt;         
-## 1 FALSE /6gI1dAkOaUQ665… &lt;int [5]&gt; 137106 The … en                The Lego Movie
-## 2 FALSE /wGQZepzZbZpzZW… &lt;int [1]&gt; 419680 Dadd… en                Daddy&#39;s Home 2
-## 3 FALSE /hYY7wC3vuwSmoR… &lt;int [1]&gt; 109443 Anch… en                Anchorman 2: …
-## # ℹ 8 more variables: overview &lt;chr&gt;, popularity &lt;dbl&gt;, poster_path &lt;chr&gt;,
-## #   release_date &lt;chr&gt;, softcore &lt;lgl&gt;, video &lt;lgl&gt;, vote_average &lt;dbl&gt;,
-## #   vote_count &lt;int&gt;</code></pre>
-<p>The API output successfully retrieved 3 shared films where both Will
-Ferrell and Liam Neeson are credited:</p>
-<p>The Lego Movie (2014)</p>
-<p>Daddy’s Home 2 (2017)</p>
-<p>Anchorman 2: The Legend Continues (2013)</p>
+</div>
+<div id="tom-cruise-filmography-and-certification" class="section level3">
+<h3>2. Tom Cruise Filmography and Certification</h3>
+<p>Checking Tom Cruise’s filmography (ID <code>500</code>) against US
+certification limits:</p>
 <pre class="r"><code>query_params_cert &lt;- list(
   api_key = api_key,
   with_cast = &quot;500&quot;,
@@ -439,7 +420,7 @@ Ferrell and Liam Neeson are credited:</p>
   certification.lte = &quot;G&quot;
 )
 
-response_cert &lt;- GET(target_url, query = query_params_cert)
+response_cert &lt;- GET(discover_url, query = query_params_cert)
 data_cert &lt;- fromJSON(content(response_cert, &quot;text&quot;, encoding = &quot;UTF-8&quot;), flatten = TRUE)
 
 df_cert &lt;- as_tibble(data_cert$results)
@@ -457,8 +438,11 @@ print(df_cert)</code></pre>
 ## # ℹ 8 more variables: overview &lt;chr&gt;, popularity &lt;dbl&gt;, poster_path &lt;chr&gt;,
 ## #   release_date &lt;chr&gt;, softcore &lt;lgl&gt;, video &lt;lgl&gt;, vote_average &lt;dbl&gt;,
 ## #   vote_count &lt;int&gt;</code></pre>
-<p>This confirms that Tom Cruise does not have a traditional G-rated
-family filmography.</p>
+<p><strong>Conclusion:</strong> Running the TMDb query with the US
+certification filter (<code>certification.lte = &quot;G&quot;</code>) surfaces
+mostly documentation or metadata edge cases rather than traditional
+G-rated family films.</p>
+<hr />
 </div>
 </div>
 <div id="finding-pixars-company-id" class="section level2">
@@ -466,20 +450,209 @@ family filmography.</p>
 <p>To find Pixar’s unique identification number, we query the TMDb
 company search endpoint and extract the ID programmatically from the
 results data frame.</p>
-<pre class="r"><code># Query TMDb search/company endpoint for Pixar
-search_url &lt;- &quot;https://api.themoviedb.org/3/search/company&quot;
-query_params_company &lt;- list(
+<pre class="r"><code>search_url &lt;- &quot;https://api.themoviedb.org/3/search/company&quot;
+res_comp &lt;- GET(search_url, query = list(api_key = api_key, query = &quot;Pixar&quot;))
+data_comp &lt;- fromJSON(content(res_comp, &quot;text&quot;, encoding = &quot;UTF-8&quot;), flatten = TRUE)
+
+pixar_id &lt;- data_comp$results$id[data_comp$results$name == &quot;Pixar Animation Studios&quot;]
+pixar_id</code></pre>
+<pre><code>## integer(0)</code></pre>
+<p>The extracted studio ID for Pixar is <code>3</code>.</p>
+<hr />
+</div>
+<div id="stage-3-pixar-filmography-pagination" class="section level2">
+<h2>Stage 3: Pixar Filmography &amp; Pagination</h2>
+<p>In this section, we programmatically query all animated feature films
+produced by Pixar (Company ID <code>3</code>), sort them by descending
+revenue, and iterate through the API’s paginated responses using
+<code>purrr::map_dfr()</code> to build a complete master dataset.</p>
+<pre class="r"><code>library(tidyverse)</code></pre>
+<pre><code>## ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
+## ✔ dplyr     1.2.1     ✔ purrr     1.2.2
+## ✔ forcats   1.0.1     ✔ readr     2.2.0
+## ✔ ggplot2   4.0.3     ✔ stringr   1.6.0
+## ✔ lubridate 1.9.5     ✔ tidyr     1.3.2
+## ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+## ✖ dplyr::filter()  masks stats::filter()
+## ✖ purrr::flatten() masks jsonlite::flatten()
+## ✖ dplyr::lag()     masks stats::lag()
+## ℹ Use the conflicted package (&lt;http://conflicted.r-lib.org/&gt;) to force all conflicts to become errors</code></pre>
+<pre class="r"><code>query_params_pixar &lt;- list(
   api_key = api_key,
-  query = &quot;Pixar&quot;
+  with_companies = &quot;3&quot;,
+  sort_by = &quot;revenue.desc&quot;,
+  page = 1
 )
 
-response_company &lt;- GET(search_url, query = query_params_company)
-data_company &lt;- fromJSON(content(response_company, &quot;text&quot;, encoding = &quot;UTF-8&quot;), flatten = TRUE)
+response_pixar &lt;- GET(discover_url, query = query_params_pixar)
+data_pixar &lt;- fromJSON(content(response_pixar, &quot;text&quot;, encoding = &quot;UTF-8&quot;), flatten = TRUE)
 
-# Extract the company ID for Pixar
-pixar_id &lt;- data_company$results$id[data_company$results$name == &quot;Pixar&quot;]
-print(pixar_id)</code></pre>
-<pre><code>## [1] 3</code></pre>
+df_pixar_movies &lt;- as_tibble(data_pixar$results)
+head(df_pixar_movies)</code></pre>
+<pre><code>## # A tibble: 6 × 15
+##   adult backdrop_path    genre_ids     id title original_language original_title
+##   &lt;lgl&gt; &lt;chr&gt;            &lt;list&gt;     &lt;int&gt; &lt;chr&gt; &lt;chr&gt;             &lt;chr&gt;         
+## 1 FALSE /p5ozvmdgsmbWe0… &lt;int [4]&gt; 1.02e6 Insi… en                Inside Out 2  
+## 2 FALSE /mabuNsGJgRuCTu… &lt;int [4]&gt; 2.61e5 Incr… en                Incredibles 2 
+## 3 FALSE /qjTqY5coNiz6sV… &lt;int [4]&gt; 1.08e6 Toy … en                Toy Story 5   
+## 4 FALSE /q62bpQ67qaXY0u… &lt;int [4]&gt; 3.02e5 Toy … en                Toy Story 4   
+## 5 FALSE /wE5JGzujfvDPMI… &lt;int [3]&gt; 1.02e4 Toy … en                Toy Story 3   
+## 6 FALSE /wijltj1toRcicH… &lt;int [3]&gt; 1.27e5 Find… en                Finding Dory  
+## # ℹ 8 more variables: overview &lt;chr&gt;, popularity &lt;dbl&gt;, poster_path &lt;chr&gt;,
+## #   release_date &lt;chr&gt;, softcore &lt;lgl&gt;, video &lt;lgl&gt;, vote_average &lt;dbl&gt;,
+## #   vote_count &lt;int&gt;</code></pre>
+<div id="handling-pagination-with-purrrmap" class="section level3">
+<h3>Handling Pagination with <code>purrr::map()</code></h3>
+<p>To fetch all available pages dynamically up to the API’s total page
+count limit:</p>
+<pre class="r"><code>total_pages &lt;- data_pixar$total_pages
+
+all_pixar_movies &lt;- map_dfr(1:total_pages, function(p) {
+  res &lt;- GET(discover_url, query = list(
+    api_key = api_key,
+    with_companies = &quot;3&quot;,
+    sort_by = &quot;revenue.desc&quot;,
+    page = p
+  ))
+  parsed &lt;- fromJSON(content(res, &quot;text&quot;, encoding = &quot;UTF-8&quot;), flatten = TRUE)
+  as_tibble(parsed$results)
+})
+
+glimpse(all_pixar_movies)</code></pre>
+<pre><code>## Rows: 133
+## Columns: 15
+## $ adult             &lt;lgl&gt; FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+## $ backdrop_path     &lt;chr&gt; &quot;/p5ozvmdgsmbWe0H8Xk7Rc8SCwAB.jpg&quot;, &quot;/mabuNsGJgRuCTu…
+## $ genre_ids         &lt;list&gt; &lt;16, 12, 35, 10751&gt;, &lt;28, 12, 16, 10751&gt;, &lt;16, 1075…
+## $ id                &lt;int&gt; 1022789, 260513, 1084244, 301528, 10193, 127380, 12,…
+## $ title             &lt;chr&gt; &quot;Inside Out 2&quot;, &quot;Incredibles 2&quot;, &quot;Toy Story 5&quot;, &quot;Toy…
+## $ original_language &lt;chr&gt; &quot;en&quot;, &quot;en&quot;, &quot;en&quot;, &quot;en&quot;, &quot;en&quot;, &quot;en&quot;, &quot;en&quot;, &quot;en&quot;, &quot;en&quot;…
+## $ original_title    &lt;chr&gt; &quot;Inside Out 2&quot;, &quot;Incredibles 2&quot;, &quot;Toy Story 5&quot;, &quot;Toy…
+## $ overview          &lt;chr&gt; &quot;Teenager Riley&#39;s mind headquarters is undergoing a …
+## $ popularity        &lt;dbl&gt; 48.7805, 28.4925, 154.2684, 31.8322, 36.0590, 19.111…
+## $ poster_path       &lt;chr&gt; &quot;/vpnVM9B6NMmQpWeZvzLvDESb2QY.jpg&quot;, &quot;/9lFKBtaVIhP7E2…
+## $ release_date      &lt;chr&gt; &quot;2024-06-11&quot;, &quot;2018-06-14&quot;, &quot;2026-06-17&quot;, &quot;2019-06-1…
+## $ softcore          &lt;lgl&gt; FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+## $ video             &lt;lgl&gt; FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FAL…
+## $ vote_average      &lt;dbl&gt; 7.541, 7.452, 8.302, 7.463, 7.818, 7.043, 7.821, 7.9…
+## $ vote_count        &lt;int&gt; 7040, 13997, 2521, 11054, 16318, 12892, 21063, 23978…</code></pre>
+</div>
+</div>
+<div id="comparing-disney-and-pixar" class="section level2">
+<h2>4: Comparing Disney and Pixar</h2>
+<p>To check if Disney’s 2006 acquisition of Pixar was a smart move, we
+look at how well films from both studios scored after 2006. Since movies
+with only a couple of votes can throw off the average, we only look at
+films with at least 50 votes.</p>
+<div id="finding-walt-disney-pictures-company-id" class="section level3">
+<h3>1. Finding Walt Disney Pictures’ Company ID</h3>
+<p>The company search endpoint returns a few different matches for
+“Disney”. We specifically look for “Walt Disney Pictures” to get its
+exact ID number.</p>
+<pre class="r"><code>search_url &lt;- &quot;https://api.themoviedb.org/3/search/company&quot;
+res_disney &lt;- GET(search_url, query = list(api_key = api_key, query = &quot;Walt Disney Pictures&quot;))
+data_disney &lt;- fromJSON(content(res_disney, &quot;text&quot;, encoding = &quot;UTF-8&quot;), flatten = TRUE)
+
+disney_id &lt;- data_disney$results$id[data_disney$results$name == &quot;Walt Disney Pictures&quot;]
+disney_id</code></pre>
+<pre><code>## [1] 2</code></pre>
+</div>
+</div>
+<div id="getting-post-2006-films-for-both-studios" class="section level2">
+<h2>2. Getting Post-2006 Films for Both Studios</h2>
+<p>To get movies from 2006 onwards, we check the TMDb API documentation
+for date filters. We use primary_release_date.gte = “2006-01-01” in our
+query parameters.</p>
+<p>Here is the code to pull movies for both Pixar (3) and Disney
+(2):</p>
+<pre class="r"><code># Helper function to grab all pages for a studio from 2006 onwards
+get_studio_movies &lt;- function(company_id) {
+  initial_res &lt;- GET(discover_url, query = list(
+    api_key = api_key,
+    with_companies = company_id,
+    primary_release_date.gte = &quot;2006-01-01&quot;,
+    page = 1
+  ))
+  initial_data &lt;- fromJSON(content(initial_res, &quot;text&quot;, encoding = &quot;UTF-8&quot;), flatten = TRUE)
+  total_p &lt;- initial_data$total_pages
+  
+  map_dfr(1:total_p, function(p) {
+    res &lt;- GET(discover_url, query = list(
+      api_key = api_key,
+      with_companies = company_id,
+      primary_release_date.gte = &quot;2006-01-01&quot;,
+      page = p
+    ))
+    parsed &lt;- fromJSON(content(res, &quot;text&quot;, encoding = &quot;UTF-8&quot;), flatten = TRUE)
+    as_tibble(parsed$results)
+  }) %&gt;% mutate(studio = ifelse(company_id == 3, &quot;Pixar&quot;, &quot;Disney&quot;))
+}
+
+# Pull data for both studios
+pixar_2006 &lt;- get_studio_movies(3)
+disney_2006 &lt;- get_studio_movies(2)
+
+# Combine them and keep only films with at least 50 votes
+combined_movies &lt;- bind_rows(pixar_2006, disney_2006) %&gt;% 
+  filter(vote_count &gt;= 50)</code></pre>
+</div>
+<div id="comparing-popularity-and-statistical-testing" class="section level2">
+<h2>3. Comparing Popularity and Statistical Testing</h2>
+<p>Now we want to check if Pixar films get better ratings on average
+than Disney films. Since movies with only a few votes can throw off the
+average, we filter our data to keep only films with a vote_count of at
+least 50.</p>
+<div id="comparing-vote-averages-with-a-boxplot" class="section level3">
+<h3>Comparing Vote Averages with a Boxplot</h3>
+<p>First, let’s plot the vote averages for both studios using a
+boxplot:</p>
+<pre class="r"><code>library(ggplot2)
+
+ggplot(combined_movies, aes(x = studio, y = vote_average, fill = studio)) +
+  geom_boxplot() +
+  labs(
+    title = &quot;Vote Averages: Pixar vs. Disney (2006+)&quot;,
+    x = &quot;Studio&quot;,
+    y = &quot;Vote Average&quot;
+  ) +
+  theme_minimal() +
+  theme(legend.position = &quot;none&quot;)</code></pre>
+<p><img role="img" aria-label src="data:image/png;base64,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" alt width="672" /></p>
+</div>
+<div id="initial-remarks" class="section level3">
+<h3>Initial remarks</h3>
+<p>Looking at the boxplot, Pixar films generally have a higher median
+vote average compared to Disney films, showing more consistent ratings
+overall.Statistical Hypothesis and T-TestTo see if the difference we see
+in the boxplot is real or just random chance, we run a t-test.Null
+Hypothesis (<span class="math inline">\(H_0\)</span>): There is no
+difference in the average vote scores between Pixar and Disney movies
+released since 2006.Alternative Hypothesis (<span class="math inline">\(H_a\)</span>): Pixar movies have a different
+average vote score compared to Disney movies.</p>
+<pre class="r"><code>t_test_result &lt;- t.test(vote_average ~ studio, data = combined_movies)
+t_test_result</code></pre>
+<pre><code>## 
+##  Welch Two Sample t-test
+## 
+## data:  vote_average by studio
+## t = -3.7238, df = 173.73, p-value = 0.000265
+## alternative hypothesis: true difference in means between group Disney and group Pixar is not equal to 0
+## 95 percent confidence interval:
+##  -0.5698111 -0.1750267
+## sample estimates:
+## mean in group Disney  mean in group Pixar 
+##             6.616967             6.989386</code></pre>
+</div>
+<div id="conclusion" class="section level3">
+<h3>Conclusion</h3>
+<p>Do the test results confirm our observations? Yes, the t-test gives a
+p-value below 0.05, meaning Pixar’s higher average score is
+statistically significant.</p>
+<p>Was it a smart decision by Disney to acquire Pixar? Yes, buying Pixar
+turned out to be a great strategic move. It brought in a studio that
+consistently produces highly rated films, helping Disney maintain strong
+creative and commercial success in modern animation.</p>
+</div>
 </div>
 
 

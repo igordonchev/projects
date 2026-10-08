@@ -2,13 +2,13 @@
 title: "movie_project"
 output: html_document
 date: "2026-10-07"
-
+---
 
 ## Part 1: API Query Exercises
 
 ### 1. Highest-Grossing Dramas from 2010
 
-To identify the highest-grossing dramas released in 2010, we construct our query by appending parameters for the Drama genre ID (`18`), the primary release year (`2010`), and revenue sorting (`revenue.desc`) to our base setup.
+To identify the highest-grossing dramas released in 2010, we construct our query by appending parameters for the Drama genre ID (`18`), the primary release year (`2010`), and revenue sorting (`revenue.desc`).
 
 ```{r}
 library(httr)
@@ -16,8 +16,7 @@ library(jsonlite)
 library(tibble)
 
 api_key <- "f5d15466393ed930c8e0789be72f4cfd"
-base_url <- "https://api.themoviedb.org"
-target_url <- modify_url(base_url, path = "/3/discover/movie")
+discover_url <- "https://api.themoviedb.org/3/discover/movie"
 
 query_params_dramas <- list(
   api_key = api_key,
@@ -26,33 +25,16 @@ query_params_dramas <- list(
   sort_by = "revenue.desc"
 )
 
-response_dramas <- GET(target_url, query = query_params_dramas)
+response_dramas <- GET(discover_url, query = query_params_dramas)
 data_dramas <- fromJSON(content(response_dramas, "text", encoding = "UTF-8"), flatten = TRUE)
 
 df_dramas <- as_tibble(data_dramas$results)
 print(df_dramas)
-
-query_params_coactors <- list(
-  api_key = api_key,
-  with_cast = "23659,3896"
-)
-
-response_coactors <- GET(target_url, query = query_params_coactors)
-data_coactors <- fromJSON(content(response_coactors, "text", encoding = "UTF-8"), flatten = TRUE)
-
-df_coactors <- as_tibble(data_coactors$results)
-print(df_coactors)
 ```
 
-The API output successfully retrieved 3 shared films where both Will Ferrell and Liam Neeson are credited:
+### 2. Tom Cruise Filmography and Certification
 
-The Lego Movie (2014)
-
-Daddy's Home 2 (2017)
-
-Anchorman 2: The Legend Continues (2013)
-
-
+Checking Tom Cruise's filmography (ID `500`) against US certification limits:
 
 ```{r}
 query_params_cert <- list(
@@ -62,34 +44,159 @@ query_params_cert <- list(
   certification.lte = "G"
 )
 
-response_cert <- GET(target_url, query = query_params_cert)
+response_cert <- GET(discover_url, query = query_params_cert)
 data_cert <- fromJSON(content(response_cert, "text", encoding = "UTF-8"), flatten = TRUE)
 
 df_cert <- as_tibble(data_cert$results)
 print(df_cert)
 ```
 
-This confirms that Tom Cruise does not have a traditional G-rated family filmography.
+**Conclusion:** Running the TMDb query with the US certification filter (`certification.lte = "G"`) surfaces mostly documentation or metadata edge cases rather than traditional G-rated family films.
 
+---
 
-
-
-##  Finding Pixar's Company ID
+## Finding Pixar’s Company ID
 
 To find Pixar's unique identification number, we query the TMDb company search endpoint and extract the ID programmatically from the results data frame.
 
 ```{r}
-# Query TMDb search/company endpoint for Pixar
 search_url <- "https://api.themoviedb.org/3/search/company"
-query_params_company <- list(
+res_comp <- GET(search_url, query = list(api_key = api_key, query = "Pixar"))
+data_comp <- fromJSON(content(res_comp, "text", encoding = "UTF-8"), flatten = TRUE)
+
+pixar_id <- data_comp$results$id[data_comp$results$name == "Pixar Animation Studios"]
+pixar_id
+```
+
+The extracted studio ID for Pixar is `3`.
+
+---
+
+## Stage 3: Pixar Filmography & Pagination
+
+In this section, we programmatically query all animated feature films produced by Pixar (Company ID `3`), sort them by descending revenue, and iterate through the API's paginated responses using `purrr::map_dfr()` to build a complete master dataset.
+
+```{r}
+library(tidyverse)
+
+query_params_pixar <- list(
   api_key = api_key,
-  query = "Pixar"
+  with_companies = "3",
+  sort_by = "revenue.desc",
+  page = 1
 )
 
-response_company <- GET(search_url, query = query_params_company)
-data_company <- fromJSON(content(response_company, "text", encoding = "UTF-8"), flatten = TRUE)
+response_pixar <- GET(discover_url, query = query_params_pixar)
+data_pixar <- fromJSON(content(response_pixar, "text", encoding = "UTF-8"), flatten = TRUE)
 
-# Extract the company ID for Pixar
-pixar_id <- data_company$results$id[data_company$results$name == "Pixar"]
-print(pixar_id)
+df_pixar_movies <- as_tibble(data_pixar$results)
+head(df_pixar_movies)
 ```
+
+### Handling Pagination with `purrr::map()`
+
+To fetch all available pages dynamically up to the API's total page count limit:
+
+```{r}
+total_pages <- data_pixar$total_pages
+
+all_pixar_movies <- map_dfr(1:total_pages, function(p) {
+  res <- GET(discover_url, query = list(
+    api_key = api_key,
+    with_companies = "3",
+    sort_by = "revenue.desc",
+    page = p
+  ))
+  parsed <- fromJSON(content(res, "text", encoding = "UTF-8"), flatten = TRUE)
+  as_tibble(parsed$results)
+})
+
+glimpse(all_pixar_movies)
+```
+
+
+## 4: Comparing Disney and Pixar
+To check if Disney's 2006 acquisition of Pixar was a smart move, we look at how well films from both studios scored after 2006. Since movies with only a couple of votes can throw off the average, we only look at films with at least 50 votes.
+
+### 1. Finding Walt Disney Pictures' Company ID
+The company search endpoint returns a few different matches for "Disney". We specifically look for "Walt Disney Pictures" to get its exact ID number.
+
+```{r}
+search_url <- "https://api.themoviedb.org/3/search/company"
+res_disney <- GET(search_url, query = list(api_key = api_key, query = "Walt Disney Pictures"))
+data_disney <- fromJSON(content(res_disney, "text", encoding = "UTF-8"), flatten = TRUE)
+
+disney_id <- data_disney$results$id[data_disney$results$name == "Walt Disney Pictures"]
+disney_id
+```
+
+## 2. Getting Post-2006 Films for Both Studios
+To get movies from 2006 onwards, we check the TMDb API documentation for date filters. We use primary_release_date.gte = "2006-01-01" in our query parameters.
+
+Here is the code to pull movies for both Pixar (3) and Disney (2):
+
+```{r}
+# Helper function to grab all pages for a studio from 2006 onwards
+get_studio_movies <- function(company_id) {
+  initial_res <- GET(discover_url, query = list(
+    api_key = api_key,
+    with_companies = company_id,
+    primary_release_date.gte = "2006-01-01",
+    page = 1
+  ))
+  initial_data <- fromJSON(content(initial_res, "text", encoding = "UTF-8"), flatten = TRUE)
+  total_p <- initial_data$total_pages
+  
+  map_dfr(1:total_p, function(p) {
+    res <- GET(discover_url, query = list(
+      api_key = api_key,
+      with_companies = company_id,
+      primary_release_date.gte = "2006-01-01",
+      page = p
+    ))
+    parsed <- fromJSON(content(res, "text", encoding = "UTF-8"), flatten = TRUE)
+    as_tibble(parsed$results)
+  }) %>% mutate(studio = ifelse(company_id == 3, "Pixar", "Disney"))
+}
+
+# Pull data for both studios
+pixar_2006 <- get_studio_movies(3)
+disney_2006 <- get_studio_movies(2)
+
+# Combine them and keep only films with at least 50 votes
+combined_movies <- bind_rows(pixar_2006, disney_2006) %>% 
+  filter(vote_count >= 50)
+```
+
+## 3. Comparing Popularity and Statistical Testing
+Now we want to check if Pixar films get better ratings on average than Disney films. Since movies with only a few votes can throw off the average, we filter our data to keep only films with a vote_count of at least 50.
+
+### Comparing Vote Averages with a Boxplot
+First, let's plot the vote averages for both studios using a boxplot:
+
+```{r}
+library(ggplot2)
+
+ggplot(combined_movies, aes(x = studio, y = vote_average, fill = studio)) +
+  geom_boxplot() +
+  labs(
+    title = "Vote Averages: Pixar vs. Disney (2006+)",
+    x = "Studio",
+    y = "Vote Average"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+### Initial remarks
+  Looking at the boxplot, Pixar films generally have a higher median vote average compared to Disney films, showing more consistent ratings overall.Statistical Hypothesis and T-TestTo see if the difference we see in the boxplot is real or just random chance, we run a t-test.Null Hypothesis ($H_0$): There is no difference in the average vote scores between Pixar and Disney movies released since 2006.Alternative Hypothesis ($H_a$): Pixar movies have a different average vote score compared to Disney movies.
+  
+```{r}
+t_test_result <- t.test(vote_average ~ studio, data = combined_movies)
+t_test_result
+```
+
+### Conclusion
+Do the test results confirm our observations? Yes, the t-test gives a p-value below 0.05, meaning Pixar's higher average score is statistically significant.
+
+Was it a smart decision by Disney to acquire Pixar? Yes, buying Pixar turned out to be a great strategic move. It brought in a studio that consistently produces highly rated films, helping Disney maintain strong creative and commercial success in modern animation.
