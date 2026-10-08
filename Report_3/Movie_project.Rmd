@@ -1,0 +1,46 @@
+---
+title: "movie_project"
+output: html_document
+date: "2026-10-07"
+
+
+## Part 1: API Query Exercises
+
+### 1. Highest-Grossing Dramas from 2010
+
+To identify the highest-grossing dramas released in 2010, we construct our query by appending parameters for the Drama genre ID (`18`), the primary release year (`2010`), and revenue sorting (`revenue.desc`) to our base setup.
+
+```{r}
+library(httr)
+library(jsonlite)
+library(tibble)
+
+api_key <- "f5d15466393ed930c8e0789be72f4cfd"
+base_url <- "https://api.themoviedb.org"
+target_url <- modify_url(base_url, path = "/3/discover/movie")
+
+query_params_dramas <- list(
+  api_key = api_key,
+  with_genres = "18",
+  primary_release_year = "2010",
+  sort_by = "revenue.desc"
+)
+
+response_dramas <- GET(target_url, query = query_params_dramas)
+data_dramas <- fromJSON(content(response_dramas, "text", encoding = "UTF-8"), flatten = TRUE)
+
+df_dramas <- as_tibble(data_dramas$results)
+print(df_dramas)
+
+query_params_coactors <- list(
+  api_key = api_key,
+  with_cast = "23659,3896"
+)
+
+response_coactors <- GET(target_url, query = query_params_coactors)
+data_coactors <- fromJSON(content(response_coactors, "text", encoding = "UTF-8"), flatten = TRUE)
+
+df_coactors <- as_tibble(data_coactors$results)
+print(df_coactors)
+```
+
