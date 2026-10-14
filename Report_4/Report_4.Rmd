@@ -1,0 +1,29 @@
+---
+title: "Olympic_project"
+output: html_document
+date: "2026-10-07"
+---
+
+
+Phase 1: Loading and Exploring the Data
+To kick off our analysis, we will load the four sheets from our Excel workbook using readxl and use tidyverse tools to inspect their structure, check for duplicates, and understand value ranges.
+
+Here is the R script to set up our environment and inspect the datasets:
+
+```{r}
+# Load required libraries
+library(tidyverse)
+library(readxl)
+
+# Load the four sheets from the Excel file
+games <- read_excel("olympics.xlsx", sheet = "games")
+athletes <- read_excel("olympics.xlsx", sheet = "athletes")
+country <- read_excel("olympics.xlsx", sheet = "country")
+medals <- read_excel("olympics.xlsx", sheet = "medals")
+
+# Preview the structure of each dataset
+glimpse(games)
+glimpse(athletes)
+glimpse(country)
+```
+glimpse(medals)
