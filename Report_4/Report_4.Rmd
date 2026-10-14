@@ -235,3 +235,112 @@ data:  test_matrix
 X-squared = 4426.6, df = 14, p-value < 2.2e-16
 
   The test yielded a test statistic of $\chi^2 = 4426.6$ with 14 degrees of freedom, resulting in an extraordinarily small $p$-value ($p < 2.2 \times 10^{-16}$).Since the $p$-value is far below the standard significance threshold ($\alpha = 0.05$), we reject the null hypothesis.This statistical result strongly aligns with the observations from our bar chart: there is a highly significant relationship between a country and its probability of winning a medal per event entry.
+  
+  
+## Part 6: Sport-Level Average Height vs. Average Weight and BMI Analysis
+
+To examine the physical profile of different sports, we calculated the average height, average weight, and Body Mass Index (BMI) for each sport. BMI is computed as:
+$$\text{BMI} = \frac{\text{weight in kg}}{(\text{height in meters})^2}$$
+
+Using a layered `ggplot2` approach, we plotted all sports as background points and selectively highlighted and labeled the sports with the extreme values (max/min height, weight, and BMI).
+
+```{r part6-sport-bmi-plot, message=FALSE, warning=FALSE}
+library(ggrepel)
+
+# 1. Join medals and athletes to connect physical attributes with sports, then calculate averages
+sport_physical <- medals %>%
+  left_join(athletes, by = c("athlete_id" = "ID")) %>%
+  filter(!is.na(Height) & !is.na(Weight) & !is.na(Sport)) %>%
+  group_by(Sport) %>%
+  summarise(
+    avg_height_cm = mean(Height, na.rm = TRUE),
+    avg_weight_kg = mean(Weight, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    avg_height_m = avg_height_cm / 100,
+    avg_BMI = avg_weight_kg / (avg_height_m^2)
+  )
+
+# 2. Identify the specific sports meeting our extreme criteria
+extreme_sports <- sport_physical %>%
+  filter(
+    avg_height_cm == max(avg_height_cm) |
+    avg_height_cm == min(avg_height_cm) |
+    avg_weight_kg == max(avg_weight_kg) |
+    avg_weight_kg == min(avg_weight_kg) |
+    avg_BMI       == max(avg_BMI)       |
+    avg_BMI       == min(avg_BMI)
+  )
+
+# 3. Create the layered scatterplot
+ggplot(sport_physical, aes(x = avg_height_cm, y = avg_weight_kg)) +
+  # Layer 1: All sports as standard grey background points
+  geom_point(color = "grey60", alpha = 0.7, size = 2.5) +
+  # Layer 2: Extreme sports highlighted in a distinct color
+  geom_point(data = extreme_sports, aes(color = Sport), size = 3.5, show.legend = FALSE) +
+  # Layer 3: Labels for the extreme sports using ggrepel to prevent overlap
+  geom_text_repel(
+    data = extreme_sports, 
+    aes(label = Sport), 
+    box.padding = 0.5, 
+    point.padding = 0.3,
+    fontface = "bold",
+    max.overlaps = Inf
+  ) +
+  labs(
+    title = "Average Height vs. Average Weight by Sport",
+    subtitle = "Highlighting extreme height, weight, and BMI profiles",
+    x = "Average Height (cm)",
+    y = "Average Weight (kg)",
+    caption = "Source: Olympic Dataset"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 12),
+    plot.subtitle = element_text(size = 10, color = "grey30")
+  )
+
+```
+
+## Part 7: Medal Distribution Over Time by Season
+
+To examine how the distribution of medals has evolved over time, we aggregated the total number of Gold, Silver, and Bronze medals awarded per year. Using facets, we separated the trends between Summer and Winter Olympic Games to account for differences in scheduling and event expansion.
+
+```{r}
+# 1. Join medals with games to get Year and Season, then aggregate
+medal_trends <- medals %>%
+  left_join(games, by = c("Games" = "Games")) %>%
+  filter(!is.na(Year) & !is.na(Medal) & !is.na(Season)) %>%
+  # Standardize medal names just in case of casing differences
+  mutate(Medal = str_to_title(Medal)) %>%
+  filter(Medal %in% c("Gold", "Silver", "Bronze")) %>%
+  group_by(Year, Season, Medal) %>%
+  summarise(n_medals = n(), .groups = "drop")
+
+# Ensure Medal is ordered logically
+medal_trends$Medal <- factor(medal_trends$Medal, levels = c("Gold", "Silver", "Bronze"))
+
+# 2. Create the faceted line plot
+ggplot(medal_trends, aes(x = Year, y = n_medals, color = Medal)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 1.5) +
+  facet_wrap(~ Season, scales = "free_y", ncol = 1) +
+  scale_color_manual(values = c("Gold" = "#D4AF37", "Silver" = "#A8A9AD", "Bronze" = "#CD7F32")) +
+  labs(
+    title = "Number of Medals Awarded Over Time",
+    subtitle = "Comparison between Summer and Winter Olympic Games",
+    x = "Year",
+    y = "Total Medals Awarded",
+    color = "Medal Type",
+    caption = "Source: Olympic Dataset"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 12),
+    plot.subtitle = element_text(size = 10, color = "grey30"),
+    strip.text = element_text(face = "bold", size = 11),
+    legend.position = "bottom"
+  )
+
+```
