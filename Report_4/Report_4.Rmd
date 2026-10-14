@@ -11,19 +11,329 @@ To kick off our analysis, we will load the four sheets from our Excel workbook u
 Here is the R script to set up our environment and inspect the datasets:
 
 ```{r}
-# Load required libraries
 library(tidyverse)
 library(readxl)
 
-# Load the four sheets from the Excel file
+# Load the four sheets from your working directory
 games <- read_excel("olympics.xlsx", sheet = "games")
 athletes <- read_excel("olympics.xlsx", sheet = "athletes")
 country <- read_excel("olympics.xlsx", sheet = "country")
 medals <- read_excel("olympics.xlsx", sheet = "medals")
 
-# Preview the structure of each dataset
+# Quick check
 glimpse(games)
-glimpse(athletes)
-glimpse(country)
 ```
-glimpse(medals)
+
+
+
+
+## Part 1: Athletes Who Competed for Different Countries
+
+To check if any athletes represented more than one country over time, I looked at the country table. Since every row in this table shows an athlete's participation in a specific Games, I grouped the data by athlete_id and counted how many unique country codes (NOC) each person had. After that, I filtered for anyone with more than 1 country.
+
+```{r}
+# Group by athlete and count unique NOCs
+multi_country_athletes <- country %>%
+  group_by(athlete_id) %>%
+  summarise(n_countries = n_distinct(NOC), .groups = "drop") %>%
+  filter(n_countries > 1)
+
+# Store count for inline R code and print to see the output
+num_multi_country <- nrow(multi_country_athletes)
+print(num_multi_country)
+```
+## Part 2: Athletes Who Participated in the Most Games
+
+To find out which athletes took part in the highest number of Olympic Games, I looked at the `country` table. Since every row represents an athlete's appearance at a specific Games, I joined this table with the `athletes` table to get their names. Then, I grouped the data by athlete and counted how many unique `Games` each person attended, sorting the list in descending order to see the top 10.
+
+## Part 2: Athletes Who Participated in the Most Games
+
+To find out which athletes took part in the highest number of Olympic Games, I looked at the country table. Since every row represents an athlete's appearance at a specific Games, I grouped the data by athlete_id and counted how many unique Games each person attended. Then, I joined this with the athletes table to get their names and sorted the list to find the top 10.
+
+## Part 2: Athletes Who Participated in the Most Games
+
+To find out which athletes took part in the highest number of Olympic Games, I looked at the country table. Since every row represents an athlete's appearance at a specific Games, I grouped the data by athlete_id and counted how many unique Games each person attended. Then, I joined this with the athletes table to get their names and sorted the list to find the top 10.
+
+```{r}
+# Count unique Games per athlete, join with names, and get top 10
+top_athletes_games <- country %>%
+  group_by(athlete_id) %>%
+  summarise(n_games = n_distinct(Games), .groups = "drop") %>%
+  left_join(athletes, by = c("athlete_id" = "ID")) %>%
+  arrange(desc(n_games)) %>%
+  head(10)
+
+# Print the top 10 results
+print(top_athletes_games %>% select(Name, n_games, Sex))
+
+```
+
+## Observations
+Ian Millar holds the overall record with an impressive 10 Olympic appearances, representing Canada in show jumping across four decades. He is closely followed by Latvian shooter Afanasijs Kuzmins and Austrian sailor Hubert Raudaschl, who each competed in 9 Olympic Games.
+
+Looking at this top 10 list, it is clear that many of these extremely long careers happen in sports like equestrian, shooting, and sailing, where physical endurance can be maintained over many decades compared to high-impact sports.
+
+## Part 3: Athletes with the Most Events
+
+To find out which ten athletes competed in the highest total number of events, I counted the number of event entries per athlete in the `medals` table. I joined this with the `athletes` table to get their names.
+
+To check whether athletes participated in more than one event during a single Games, I calculated the number of events per athlete per Games edition.
+
+## Part 3: Athletes with the Most Events
+
+To find out which ten athletes competed in the highest total number of events, I counted the number of event entries per athlete in the `medals` table. I joined this with the `athletes` table to get their names.
+
+To check whether athletes participated in more than one event during a single Games, I calculated the number of events per athlete per Games edition.
+
+```{r}
+# 1. Top 10 athletes by total events competed in
+top_athletes_events <- medals %>%
+  group_by(athlete_id) %>%
+  summarise(n_events = n(), .groups = "drop") %>%
+  left_join(athletes, by = c("athlete_id" = "ID")) %>%
+  arrange(desc(n_events)) %>%
+  head(10)
+
+print(top_athletes_events %>% select(Name, n_events, Sex))
+
+# 2. Check if athletes compete in multiple events in a single Games
+events_per_games <- medals %>%
+  group_by(athlete_id, Games) %>%
+  summarise(events_in_game = n(), .groups = "drop")
+
+# Print max events competed by a single athlete in a single Games
+max_events_in_single_games <- max(events_per_games$events_in_game)
+print(paste("Maximum events in a single Games by one athlete:", max_events_in_single_games))
+```
+### Observations
+
+Looking at the table, Robert Tait McKenzie has the highest number of events with 58, followed by Heikki Savolainen with 39. Many of the top athletes on this list are gymnasts or shooter competitors.
+
+Also, it turns out athletes definitely compete in more than one event during a single Games. The highest number of events for a single athlete in one Games was 44, which is pretty crazy!
+
+## Part 4: Medals per Country and Year (Top 15 Countries)
+
+To analyze medal counts over time, I first joined the `medals`, `country`, and `games` tables. I filtered out rows where no medal was won (`!is.na(Medal)`). 
+
+Next, I identified the top 15 countries with the highest total medal counts overall and used this list to filter the data. Finally, I pivoted the table so that each country is a row and each Olympic year is a column.
+
+```{r}
+# 1. Join medals, country, and games to get medal records with Year and NOC
+medals_full <- medals %>%
+  filter(!is.na(Medal)) %>%
+  left_join(country, by = c("athlete_id", "Games")) %>%
+  left_join(games, by = "Games")
+
+# 2. Find the top 15 countries by total medal count
+top_15_countries <- medals_full %>%
+  group_by(NOC) %>%
+  summarise(total_medals = n(), .groups = "drop") %>%
+  arrange(desc(total_medals)) %>%
+  head(15) %>%
+  pull(NOC)
+
+# 3. Create table: 15 countries (rows) x Years (columns)
+medals_by_year <- medals_full %>%
+  filter(NOC %in% top_15_countries) %>%
+  group_by(NOC, Year) %>%
+  summarise(n_medals = n(), .groups = "drop") %>%
+  pivot_wider(names_from = Year, values_from = n_medals, values_fill = 0)
+
+# Print the final table structure
+print(medals_by_year)
+
+```
+
+## Part 4: Medals per Country and Year
+
+For this part, I made a table showing medal counts for each country across different Olympic years.
+
+First, I combined the tables to get the country code (`NOC`) and `Year` for every medal. Then I found the top 15 countries overall. Finally, I rearranged the table so each country has its own row and each year has its own column.
+
+```{r}
+# 1. Combine tables to get medals with country and year
+medals_full <- medals %>%
+  filter(!is.na(Medal)) %>%
+  left_join(country, by = c("athlete_id", "Games")) %>%
+  left_join(games, by = "Games")
+
+# 2. Find top 15 countries overall
+top_15_countries <- medals_full %>%
+  group_by(NOC) %>%
+  summarise(total_medals = n(), .groups = "drop") %>%
+  arrange(desc(total_medals)) %>%
+  head(15) %>%
+  pull(NOC)
+
+# 3. Put years as columns instead of rows
+medals_by_year <- medals_full %>%
+  filter(NOC %in% top_15_countries) %>%
+  group_by(NOC, Year) %>%
+  summarise(n_medals = n(), .groups = "drop") %>%
+  pivot_wider(names_from = Year, values_from = n_medals, values_fill = 0)
+
+print(medals_by_year)
+
+```
+## Part 4: Medals per Country and Year
+
+Before jumping into building the top countries table, I checked the hint to see what happened in the 1956 Olympic Games. 
+
+### Investigating the 1956 Games
+
+Looking at the `games` table for 1956, there are actually two different entries for the Summer Olympics:
+
+```{r}
+# Inspect 1956 entries in the games table
+games %>% 
+  filter(Year == 1956)
+```
+
+Because Games == "1956 Summer" appears twice in the games dataset, joining directly on Games causes duplicate rows. To avoid this, I used distinct() to grab unique Games and Year pairs.
+
+### Top 15 Countries Medal Table
+Now I can combine the datasets, find the top 15 countries with the most medals overall, and put the years as columns across the top.
+
+```{r}
+# 1. Combine tables safely (using distinct on games to fix the 1956 double entry)
+medals_full <- medals %>%
+  filter(!is.na(Medal)) %>%
+  left_join(country, by = c("athlete_id", "Games")) %>%
+  left_join(games %>% select(Games, Year) %>% distinct(), by = "Games")
+
+# 2. Find the top 15 countries with the most total medals
+top_15_countries <- medals_full %>%
+  group_by(NOC) %>%
+  summarise(total_medals = n(), .groups = "drop") %>%
+  arrange(desc(total_medals)) %>%
+  head(15) %>%
+  pull(NOC)
+
+# 3. Create the table with countries as rows and years as columns
+medals_by_year <- medals_full %>%
+  filter(NOC %in% top_15_countries) %>%
+  group_by(NOC, Year) %>%
+  summarise(n_medals = n(), .groups = "drop") %>%
+  pivot_wider(names_from = Year, values_from = n_medals, values_fill = 0)
+
+print(medals_by_year)
+```
+
+Observations
+Looking at the table, there are a lot of zeros for certain countries in the early years. This is mostly because countries like the Soviet Union (URS) or East Germany (GDR) started competing under those country codes much later.
+
+## Part 5: Relationship Between Country and Medal Success Rate
+
+We know that some countries win more total medals simply because they send larger teams to compete in more events. In this part, I investigated whether certain countries perform better per event entry by calculating their medal winning percentage (medals won divided by total event entries).
+
+As instructed, this analysis focuses on the top 15 countries identified in Part 4.
+
+---
+
+### Medal Winning Percentage by Country
+
+To calculate the winning percentage, I counted both medal-winning entries (`!is.na(Medal)`) and non-winning entries (`is.na(Medal)`) for each country.
+
+## Part 5: Relationship Between Country and Medal Success Rate
+
+We know that some countries win more total medals simply because they send larger teams to compete in more events. In this part, I investigated whether certain countries perform better per event entry by calculating their medal winning percentage (medals won divided by total event entries).
+
+As instructed, this analysis focuses on the top 15 countries identified in Part 4.
+
+## Part 5: Relationship Between Country and Medal Success Rate
+
+We know that some countries win more total medals simply because they send larger teams to compete in more events. In this part, I investigated whether certain countries perform better per event entry by calculating their medal winning percentage (medals won divided by total event entries).
+
+As instructed, this analysis focuses on the top 15 countries identified in Part 4.
+
+### Medal Winning Percentage by Country
+
+To calculate the winning percentage, I counted both medal-winning entries (`!is.na(Medal)`) and non-winning entries (`is.na(Medal)`) for each country.
+
+## Part 5
+
+### Is there a relationship between country and the probability of winning a medal?
+
+We know that some countries win more medals than others. In this part we want to work out whether some countries win more medals simply because they have more athletes competing for more events, or whether their athletes are in fact performing better in general.
+
+For this part, look only at the top 15 countries that you established in the previous section.
+
+```{r}
+library(ggplot2)
+
+# 1. Join full medals table with country table to define all_entries
+all_entries <- medals %>%
+  left_join(country, by = c("athlete_id", "Games")) %>%
+  filter(NOC %in% top_15_countries)
+
+# 2. Compute winning percentage for top 15 countries
+top15_data <- all_entries %>%
+  group_by(NOC) %>%
+  summarise(
+    total_entries = n(),
+    medals_won = sum(!is.na(Medal)),
+    win_pct = (medals_won / total_entries) * 100,
+    .groups = "drop"
+  ) %>%
+  mutate(NOC = reorder(NOC, win_pct))
+
+# 3. Standard course-style ggplot2 horizontal bar chart
+ggplot(top15_data, aes(x = win_pct, y = NOC)) +
+  geom_col(fill = "steelblue") +
+  labs(
+    title = "Medal Winning Percentage by Country",
+    x = "Medals Won (% of Total Entries)",
+    y = "Country (NOC)"
+  ) +
+  xlim(0, 50) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.major.y = element_blank(),
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
+
+```
+
+## Chart Observations
+
+Looking at the chart, there is a clear difference between countries:
+
+- **Higher Efficiency:** Countries like URS (Soviet Union), GDR (East Germany), and USA have higher success rates per entry.
+- **Lower Efficiency:** Other countries win fewer medals relative to how many events they enter.
+- **Key Takeaway:** This suggests that winning medals is not just about sending more athletes; some countries have a higher performance efficiency per event.
+
+## Chi-Square Test
+
+To test this statistically, I ran a Chi-Square test to check if winning a medal is independent of the country.
+
+- **Null Hypothesis ($H_0$):** There is no relationship between country and whether an entry wins a medal.
+- **Alternative Hypothesis ($H_1$):** There is a relationship between country and winning a medal.
+
+```{r}
+# 1. Join full medals table (including NAs) with country table
+all_entries <- medals %>%
+  left_join(country, by = c("athlete_id", "Games")) %>%
+  filter(NOC %in% top_15_countries)
+
+# 2. Count medals won vs not won per country
+medal_counts <- all_entries %>%
+  mutate(won = ifelse(!is.na(Medal), "Won", "No Medal")) %>%
+  group_by(NOC, won) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  pivot_wider(names_from = won, values_from = count, values_fill = 0)
+
+# 3. Convert to matrix for chisq.test
+test_matrix <- as.matrix(medal_counts[, c("Won", "No Medal")])
+rownames(test_matrix) <- medal_counts$NOC
+
+# 4. Run Chi-Square test
+chisq.test(test_matrix)
+
+```
+
+## Pearson's Chi-squared test
+
+data:  test_matrix
+X-squared = 4426.6, df = 14, p-value < 2.2e-16
+
+  The test yielded a test statistic of $\chi^2 = 4426.6$ with 14 degrees of freedom, resulting in an extraordinarily small $p$-value ($p < 2.2 \times 10^{-16}$).Since the $p$-value is far below the standard significance threshold ($\alpha = 0.05$), we reject the null hypothesis.This statistical result strongly aligns with the observations from our bar chart: there is a highly significant relationship between a country and its probability of winning a medal per event entry.
