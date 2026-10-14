@@ -5,22 +5,19 @@ date: "2026-10-07"
 ---
 
 
-Phase 1: Loading and Exploring the Data
-To kick off our analysis, we will load the four sheets from our Excel workbook using readxl and use tidyverse tools to inspect their structure, check for duplicates, and understand value ranges.
+# Phase 1: Environment Setup & Data Loading
 
-Here is the R script to set up our environment and inspect the datasets:
+To kick off our analysis, we load the four sheets from our Excel workbook (`olympics.xlsx`) using `readxl` and inspect their structure.
 
-```{r}
+```{r setup-data, message=FALSE, warning=FALSE}
 library(tidyverse)
 library(readxl)
 
-# Load the four sheets from your working directory
-games <- read_excel("olympics.xlsx", sheet = "games")
+games    <- read_excel("olympics.xlsx", sheet = "games")
 athletes <- read_excel("olympics.xlsx", sheet = "athletes")
-country <- read_excel("olympics.xlsx", sheet = "country")
-medals <- read_excel("olympics.xlsx", sheet = "medals")
+country  <- read_excel("olympics.xlsx", sheet = "country")
+medals   <- read_excel("olympics.xlsx", sheet = "medals")
 
-# Quick check
 glimpse(games)
 ```
 
@@ -42,13 +39,6 @@ multi_country_athletes <- country %>%
 num_multi_country <- nrow(multi_country_athletes)
 print(num_multi_country)
 ```
-## Part 2: Athletes Who Participated in the Most Games
-
-To find out which athletes took part in the highest number of Olympic Games, I looked at the `country` table. Since every row represents an athlete's appearance at a specific Games, I joined this table with the `athletes` table to get their names. Then, I grouped the data by athlete and counted how many unique `Games` each person attended, sorting the list in descending order to see the top 10.
-
-## Part 2: Athletes Who Participated in the Most Games
-
-To find out which athletes took part in the highest number of Olympic Games, I looked at the country table. Since every row represents an athlete's appearance at a specific Games, I grouped the data by athlete_id and counted how many unique Games each person attended. Then, I joined this with the athletes table to get their names and sorted the list to find the top 10.
 
 ## Part 2: Athletes Who Participated in the Most Games
 
@@ -73,11 +63,6 @@ Ian Millar holds the overall record with an impressive 10 Olympic appearances, r
 
 Looking at this top 10 list, it is clear that many of these extremely long careers happen in sports like equestrian, shooting, and sailing, where physical endurance can be maintained over many decades compared to high-impact sports.
 
-## Part 3: Athletes with the Most Events
-
-To find out which ten athletes competed in the highest total number of events, I counted the number of event entries per athlete in the `medals` table. I joined this with the `athletes` table to get their names.
-
-To check whether athletes participated in more than one event during a single Games, I calculated the number of events per athlete per Games edition.
 
 ## Part 3: Athletes with the Most Events
 
@@ -111,70 +96,8 @@ Looking at the table, Robert Tait McKenzie has the highest number of events with
 
 Also, it turns out athletes definitely compete in more than one event during a single Games. The highest number of events for a single athlete in one Games was 44, which is pretty crazy!
 
-## Part 4: Medals per Country and Year (Top 15 Countries)
 
-To analyze medal counts over time, I first joined the `medals`, `country`, and `games` tables. I filtered out rows where no medal was won (`!is.na(Medal)`). 
 
-Next, I identified the top 15 countries with the highest total medal counts overall and used this list to filter the data. Finally, I pivoted the table so that each country is a row and each Olympic year is a column.
-
-```{r}
-# 1. Join medals, country, and games to get medal records with Year and NOC
-medals_full <- medals %>%
-  filter(!is.na(Medal)) %>%
-  left_join(country, by = c("athlete_id", "Games")) %>%
-  left_join(games, by = "Games")
-
-# 2. Find the top 15 countries by total medal count
-top_15_countries <- medals_full %>%
-  group_by(NOC) %>%
-  summarise(total_medals = n(), .groups = "drop") %>%
-  arrange(desc(total_medals)) %>%
-  head(15) %>%
-  pull(NOC)
-
-# 3. Create table: 15 countries (rows) x Years (columns)
-medals_by_year <- medals_full %>%
-  filter(NOC %in% top_15_countries) %>%
-  group_by(NOC, Year) %>%
-  summarise(n_medals = n(), .groups = "drop") %>%
-  pivot_wider(names_from = Year, values_from = n_medals, values_fill = 0)
-
-# Print the final table structure
-print(medals_by_year)
-
-```
-
-## Part 4: Medals per Country and Year
-
-For this part, I made a table showing medal counts for each country across different Olympic years.
-
-First, I combined the tables to get the country code (`NOC`) and `Year` for every medal. Then I found the top 15 countries overall. Finally, I rearranged the table so each country has its own row and each year has its own column.
-
-```{r}
-# 1. Combine tables to get medals with country and year
-medals_full <- medals %>%
-  filter(!is.na(Medal)) %>%
-  left_join(country, by = c("athlete_id", "Games")) %>%
-  left_join(games, by = "Games")
-
-# 2. Find top 15 countries overall
-top_15_countries <- medals_full %>%
-  group_by(NOC) %>%
-  summarise(total_medals = n(), .groups = "drop") %>%
-  arrange(desc(total_medals)) %>%
-  head(15) %>%
-  pull(NOC)
-
-# 3. Put years as columns instead of rows
-medals_by_year <- medals_full %>%
-  filter(NOC %in% top_15_countries) %>%
-  group_by(NOC, Year) %>%
-  summarise(n_medals = n(), .groups = "drop") %>%
-  pivot_wider(names_from = Year, values_from = n_medals, values_fill = 0)
-
-print(medals_by_year)
-
-```
 ## Part 4: Medals per Country and Year
 
 Before jumping into building the top countries table, I checked the hint to see what happened in the 1956 Olympic Games. 
@@ -222,33 +145,8 @@ print(medals_by_year)
 Observations
 Looking at the table, there are a lot of zeros for certain countries in the early years. This is mostly because countries like the Soviet Union (URS) or East Germany (GDR) started competing under those country codes much later.
 
-## Part 5: Relationship Between Country and Medal Success Rate
 
-We know that some countries win more total medals simply because they send larger teams to compete in more events. In this part, I investigated whether certain countries perform better per event entry by calculating their medal winning percentage (medals won divided by total event entries).
 
-As instructed, this analysis focuses on the top 15 countries identified in Part 4.
-
----
-
-### Medal Winning Percentage by Country
-
-To calculate the winning percentage, I counted both medal-winning entries (`!is.na(Medal)`) and non-winning entries (`is.na(Medal)`) for each country.
-
-## Part 5: Relationship Between Country and Medal Success Rate
-
-We know that some countries win more total medals simply because they send larger teams to compete in more events. In this part, I investigated whether certain countries perform better per event entry by calculating their medal winning percentage (medals won divided by total event entries).
-
-As instructed, this analysis focuses on the top 15 countries identified in Part 4.
-
-## Part 5: Relationship Between Country and Medal Success Rate
-
-We know that some countries win more total medals simply because they send larger teams to compete in more events. In this part, I investigated whether certain countries perform better per event entry by calculating their medal winning percentage (medals won divided by total event entries).
-
-As instructed, this analysis focuses on the top 15 countries identified in Part 4.
-
-### Medal Winning Percentage by Country
-
-To calculate the winning percentage, I counted both medal-winning entries (`!is.na(Medal)`) and non-winning entries (`is.na(Medal)`) for each country.
 
 ## Part 5
 
