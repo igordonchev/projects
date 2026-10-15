@@ -239,10 +239,11 @@ X-squared = 4426.6, df = 14, p-value < 2.2e-16
   
 ## Part 6: Sport-Level Average Height vs. Average Weight and BMI Analysis
 
+ Physical traits (`Height` and `Weight`) reside in the `athletes` table, while event categories (`Sport`) are stored in the `medals` table. A `left_join()` was executed to connect individual competitor measurements with their specific sport categories, enabling accurate group-level aggregation and BMI calculations.
 To examine the physical profile of different sports, we calculated the average height, average weight, and Body Mass Index (BMI) for each sport. BMI is computed as:
 $$\text{BMI} = \frac{\text{weight in kg}}{(\text{height in meters})^2}$$
 
-Using a layered `ggplot2` approach, we plotted all sports as background points and selectively highlighted and labeled the sports with the extreme values (max/min height, weight, and BMI).
+ we plotted all sports as background points and selectively highlighted and labeled the sports with the extreme values (max/min height, weight, and BMI).
 
 ```{r part6-sport-bmi-plot, message=FALSE, warning=FALSE}
 library(ggrepel)
@@ -306,11 +307,12 @@ ggplot(sport_physical, aes(x = avg_height_cm, y = avg_weight_kg)) +
 ## Part 7: Medal Distribution Over Time by Season
 
 To examine how the distribution of medals has evolved over time, we aggregated the total number of Gold, Silver, and Bronze medals awarded per year. Using facets, we separated the trends between Summer and Winter Olympic Games to account for differences in scheduling and event expansion.
+The `medals` table records individual medal awards but lacks explicit chronological values. A `left_join()` on the shared `Games` key was used to append the calendar `Year` and operational `Season` (Summer vs. Winter) from the `games` table, allowing for precise time-series aggregation and faceting.
 
 ```{r}
 # 1. Join medals with games to get Year and Season, then aggregate
 medal_trends <- medals %>%
-  left_join(games, by = c("Games" = "Games")) %>%
+  left_join(games, by = c("Games" = "Games"), relationship = "many-to-many") %>%
   filter(!is.na(Year) & !is.na(Medal) & !is.na(Season)) %>%
   # Standardize medal names just in case of casing differences
   mutate(Medal = str_to_title(Medal)) %>%
@@ -344,3 +346,10 @@ ggplot(medal_trends, aes(x = Year, y = n_medals, color = Medal)) +
   )
 
 ```
+
+### Interpretation of Results
+
+The number of medals goes up over time because the Olympics added more events and sports as the years went on. 
+
+* **Summer vs. Winter:** The Summer games give out way more medals than the Winter games.
+* **Medals:** Gold, Silver, and Bronze all follow the same pattern and stay pretty close together on the graph.
