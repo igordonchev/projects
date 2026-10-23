@@ -11,7 +11,6 @@
 
 <meta name="author" content="Igor Donchev" />
 
-<meta name="date" content="2026-10-23" />
 
 <title>Project 1</title>
 
@@ -4413,13 +4412,12 @@ display: none;
 
 <h1 class="title toc-ignore">Project 1</h1>
 <h4 class="author">Igor Donchev</h4>
-<h4 class="date">2026-10-23</h4>
 
 </div>
 
 
-<p>In this file I am trying to grab data from the rental site and clean
-it up a bit so we can use it later.</p>
+<p>I am trying to grab data from the rental site and clean it up a bit
+so we can use it later.</p>
 <pre class="r"><code>library(tidyverse)</code></pre>
 <pre><code>## ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
 ## ✔ dplyr     1.2.1     ✔ readr     2.2.0
@@ -4478,10 +4476,26 @@ rental_raw &lt;- tibble(
 so I’m using <code>parse_number()</code> to turn them into real numbers.
 Also fixing the column names and checking if the address says on
 request.</p>
-<pre class="r"><code>rental_clean &lt;- clean_names(rental_raw)
-
-rental_clean$price_chf &lt;- parse_number(rental_clean$price)</code></pre>
-<pre><code>## Warning: 15 parsing failures.
+<pre class="r"><code>rental_clean &lt;- rental_raw %&gt;%
+  clean_names() %&gt;%
+  mutate(
+    price_chf       = parse_number(price),
+    living_space_m2 = parse_number(living_space),
+    floor_num       = parse_number(floor),
+    rooms_num       = parse_number(rooms),
+    postcode_cat    = str_extract(address, &quot;\\b\\d{4}\\b&quot;),
+    address_status  = if_else(
+      str_detect(str_to_lower(address), &quot;on request|sur demande&quot;),
+      &quot;On Request&quot;,
+      &quot;Available&quot;
+    ),
+    price_per_m2    = price_chf / living_space_m2
+  )</code></pre>
+<pre><code>## Warning: There were 4 warnings in `mutate()`.
+## The first warning was:
+## ℹ In argument: `price_chf = parse_number(price)`.
+## Caused by warning:
+## ! 15 parsing failures.
 ## row col expected              actual
 ##   8  -- a number Price on request NA
 ##  12  -- a number Price on request NA
@@ -4489,55 +4503,8 @@ rental_clean$price_chf &lt;- parse_number(rental_clean$price)</code></pre>
 ## 114  -- a number Price on request NA
 ## 125  -- a number Price on request NA
 ## ... ... ........ ...................
-## See problems(...) for more details.</code></pre>
-<pre class="r"><code>rental_clean$living_space_m2 &lt;- parse_number(rental_clean$living_space)</code></pre>
-<pre><code>## Warning: 93 parsing failures.
-## row col expected           actual
-##   3  -- a number Living space: NA
-##   6  -- a number Living space: NA
-##  12  -- a number Living space: NA
-##  23  -- a number Living space: NA
-##  31  -- a number Living space: NA
-## ... ... ........ ................
-## See problems(...) for more details.</code></pre>
-<pre class="r"><code>rental_clean$floor_num &lt;- parse_number(rental_clean$floor)</code></pre>
-<pre><code>## Warning: 222 parsing failures.
-## row col expected    actual
-##   2  -- a number Floor: NA
-##  13  -- a number Floor: NA
-##  14  -- a number Floor: NA
-##  15  -- a number Floor: NA
-##  17  -- a number Floor: NA
-## ... ... ........ .........
-## See problems(...) for more details.</code></pre>
-<pre class="r"><code>rental_clean$rooms_num &lt;- parse_number(rental_clean$rooms)</code></pre>
-<pre><code>## Warning: 24 parsing failures.
-## row col expected   actual
-##  13  -- a number NA Rooms
-##  23  -- a number NA Rooms
-##  63  -- a number NA Rooms
-## 124  -- a number NA Rooms
-## 208  -- a number NA Rooms
-## ... ... ........ ........
-## See problems(...) for more details.</code></pre>
-<pre class="r"><code>rental_clean$postcode_cat &lt;- as.character(parse_number(rental_clean$address))</code></pre>
-<pre><code>## Warning: 141 parsing failures.
-## row col expected                                         actual
-##   5  -- a number Avenue Henri-Golay 36, 1219 Châtelaine        
-##  10  -- a number Promenade Champs-Fréchets 8-12, 1217 Meyrin   
-##  30  -- a number RUE DU MONT-DE-SION 4, 1206 Genève            
-##  35  -- a number Rue du Vieux-Billard 14, 1205 Genève          
-##  37  -- a number Chemin Alfred-Bétems 5, 1218 Le Grand-Saconnex
-## ... ... ........ ..............................................
-## See problems(...) for more details.</code></pre>
-<pre class="r"><code>address_lower &lt;- str_to_lower(rental_clean$address)
-rental_clean$address_status &lt;- ifelse(
-  str_detect(address_lower, &quot;on request&quot;) | str_detect(address_lower, &quot;sur demande&quot;),
-  &quot;On Request&quot;,
-  &quot;Available&quot;
-)
-
-rental_clean$price_per_m2 &lt;- rental_clean$price_chf / rental_clean$living_space_m2</code></pre>
+## See problems(...) for more details.
+## ℹ Run `dplyr::last_dplyr_warnings()` to see the 3 remaining warnings.</code></pre>
 <p>Let’s look at what the dataset looks like now.</p>
 <pre class="r"><code>glimpse(rental_clean)</code></pre>
 <pre><code>## Rows: 612
@@ -4555,7 +4522,7 @@ rental_clean$price_per_m2 &lt;- rental_clean$price_chf / rental_clean$living_spa
 ## $ living_space_m2 &lt;dbl&gt; 63, 185, NA, 170, 73, NA, 73, 150, 117, 75, 104, NA, 9…
 ## $ floor_num       &lt;dbl&gt; 4, NA, 50, 3, 1, 2, 11, 6, 5, 2, 6, 8, NA, NA, NA, 3, …
 ## $ rooms_num       &lt;dbl&gt; 3.0, 4.0, 4.0, 6.0, 4.0, 4.5, 4.0, 5.0, 4.0, 4.0, 5.0,…
-## $ postcode_cat    &lt;chr&gt; &quot;58&quot;, &quot;1290&quot;, &quot;46&quot;, &quot;1248&quot;, NA, &quot;1204&quot;, &quot;51&quot;, &quot;3&quot;, &quot;1&quot;…
+## $ postcode_cat    &lt;chr&gt; &quot;1207&quot;, &quot;1290&quot;, &quot;1202&quot;, &quot;1248&quot;, &quot;1219&quot;, &quot;1204&quot;, &quot;1217&quot;…
 ## $ address_status  &lt;chr&gt; &quot;Available&quot;, &quot;On Request&quot;, &quot;Available&quot;, &quot;On Request&quot;, …
 ## $ price_per_m2    &lt;dbl&gt; 30.15873, 24.32432, NA, 32.35294, 32.05479, NA, 27.123…</code></pre>
 <p>And quick summary of prices and space just to see what we have.</p>
@@ -5086,7 +5053,7 @@ geocoded_sample &lt;- map_sample %&gt;%
   ) %&gt;%
   filter(!is.na(latitude) &amp; !is.na(longitude))</code></pre>
 <pre><code>## Passing 28 addresses to the Nominatim single address geocoder</code></pre>
-<pre><code>## Query completed in: 28.5 seconds</code></pre>
+<pre><code>## Query completed in: 28.4 seconds</code></pre>
 <pre class="r"><code># 3. Create interactive Leaflet Map
 map_widget &lt;- leaflet(geocoded_sample) %&gt;%
   addTiles() %&gt;%
@@ -5102,8 +5069,8 @@ map_widget &lt;- leaflet(geocoded_sample) %&gt;%
 
 # Print the widget
 map_widget</code></pre>
-<div class="leaflet html-widget html-fill-item" id="htmlwidget-957e5a633b691ba9568e" style="width:672px;height:480px;"></div>
-<script type="application/json" data-for="htmlwidget-957e5a633b691ba9568e">{"x":{"options":{"crs":{"crsClass":"L.CRS.EPSG3857","code":null,"proj4def":null,"projectedBounds":null,"options":{}}},"calls":[{"method":"addTiles","args":["https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",null,null,{"minZoom":0,"maxZoom":18,"tileSize":256,"subdomains":"abc","errorTileUrl":"","tms":false,"noWrap":false,"zoomOffset":0,"zoomReverse":false,"opacity":1,"zIndex":1,"detectRetina":false,"attribution":"&copy; <a href=\"https://openstreetmap.org/copyright/\">OpenStreetMap<\/a>,  <a href=\"https://opendatacommons.org/licenses/odbl/\">ODbL<\/a>"}]},{"method":"addMarkers","args":[[46.2000863,46.2118562,46.2071742,46.2394532,46.1899232,46.2038132,46.2056314,46.1956474,46.1950047,46.1971378,46.2206955,46.2008152,46.2006646,46.2374939,46.2091589,46.1966201,46.2162981,46.1966201,46.1966201,46.2105893,46.2306871,46.22681,46.2086816,46.1979432,46.2106206,46.1983816,46.2106083,46.2012188,46.165118],[6.1607588,6.1304901,6.1102469,6.0793017,6.1511107,6.1377171,6.1172248,6.1518878,6.149666,6.153259,6.1401586,6.1726055,6.1380815,6.1245292,6.107591,6.142891,6.1202585,6.142891,6.142891,6.1468006,6.1214213,6.2281829,6.1382724,6.1977409,6.1475054,6.1341355,6.1121944,6.1352742,6.1865373],null,null,null,{"interactive":true,"draggable":false,"keyboard":true,"title":"","alt":"","zIndexOffset":0,"opacity":1,"riseOnHover":false,"riseOffset":250},["<b>Address:<\/b> Rue de la Terrassière 58, 1207 Genève<br><b>Price:<\/b> 1900 CHF CHF<br><b>Living Space:<\/b> Living space: 63 m2 m²","<b>Address:<\/b> Rue Liotard 46, 1202 Genève<br><b>Price:<\/b> 2100 CHF CHF<br><b>Living Space:<\/b> Living space: NA m²","<b>Address:<\/b> Avenue Henri-Golay 36, 1219 Châtelaine<br><b>Price:<\/b> 2340 CHF CHF<br><b>Living Space:<\/b> Living space: 73 m2 m²","<b>Address:<\/b> Rue des Lattes 51, 1217 Meyrin<br><b>Price:<\/b> 1980 CHF CHF<br><b>Living Space:<\/b> Living space: 73 m2 m²","<b>Address:<\/b> Chemin de l'Escalade 3, 1206 Genève<br><b>Price:<\/b> Price on request NA CHF<br><b>Living Space:<\/b> Living space: 150 m2 m²","<b>Address:<\/b> Rue des Rois 1, 1204 Genève<br><b>Price:<\/b> 3080 CHF CHF<br><b>Living Space:<\/b> Living space: 117 m2 m²","<b>Address:<\/b> Avenue d'Aire 73B, 1203 Genève<br><b>Price:<\/b> 2231 CHF CHF<br><b>Living Space:<\/b> Living space: 104 m2 m²","<b>Address:<\/b> Chemin Malombré 12, 1206 Genève<br><b>Price:<\/b> Price on request NA CHF<br><b>Living Space:<\/b> Living space: NA m²","<b>Address:<\/b> Rue Sautter 15, 1205 Genève<br><b>Price:<\/b> 3600 CHF CHF<br><b>Living Space:<\/b> Living space: 135 m2 m²","<b>Address:<\/b> RUE DU MONT-DE-SION 4, 1206 Genève<br><b>Price:<\/b> 5700 CHF CHF<br><b>Living Space:<\/b> Living space: 136 m2 m²","<b>Address:<\/b> RUE DE MONTBRILLANT 83, 1202 Genève<br><b>Price:<\/b> 1470 CHF CHF<br><b>Living Space:<\/b> Living space: NA m²","<b>Address:<\/b> Chemin des Tulipiers, 1208 Genève<br><b>Price:<\/b> 3170 CHF CHF<br><b>Living Space:<\/b> Living space: 96 m2 m²","<b>Address:<\/b> Rue du Vieux-Billard 14, 1205 Genève<br><b>Price:<\/b> 2245 CHF CHF<br><b>Living Space:<\/b> Living space: NA m²","<b>Address:<\/b> Chemin Alfred-Bétems 5, 1218 Le Grand-Saconnex<br><b>Price:<\/b> 1800 CHF CHF<br><b>Living Space:<\/b> Living space: NA m²","<b>Address:<\/b> Chemin de l'Ecu 15, 1219 Châtelaine<br><b>Price:<\/b> 1245 CHF CHF<br><b>Living Space:<\/b> Living space: 31 m2 m²","<b>Address:<\/b> Rue Vignier 2, 1205 Genève<br><b>Price:<\/b> 1030 CHF CHF<br><b>Living Space:<\/b> Living space: NA m²","<b>Address:<\/b> Av. du Bouchet 10, 1209 Genève<br><b>Price:<\/b> 2010 CHF CHF<br><b>Living Space:<\/b> Living space: 70 m2 m²","<b>Address:<\/b> Rue Vignier 2, 1205 Genève<br><b>Price:<\/b> 1610 CHF CHF<br><b>Living Space:<\/b> Living space: NA m²","<b>Address:<\/b> Rue Vignier 2, 1205 Genève<br><b>Price:<\/b> 1610 CHF CHF<br><b>Living Space:<\/b> Living space: NA m²","<b>Address:<\/b> Rue Alfred-Vincent, 1201 Genève<br><b>Price:<\/b> 2100 CHF CHF<br><b>Living Space:<\/b> Living space: 63 m2 m²","<b>Address:<\/b> Chemin François-Lehmann 12, 1218 Le Grand-Saconnex<br><b>Price:<\/b> 1685 CHF CHF<br><b>Living Space:<\/b> Living space: 61 m2 m²","<b>Address:<\/b> Choulex, 1244 Choulex<br><b>Price:<\/b> 3000 CHF CHF<br><b>Living Space:<\/b> Living space: 93 m2 m²","<b>Address:<\/b> 5 Rue du Jura, 1201 Genève<br><b>Price:<\/b> 1490 CHF CHF<br><b>Living Space:<\/b> Living space: 55 m2 m²","<b>Address:<\/b> Av. Bel-Air 45A, 1225 Chêne-Bourg<br><b>Price:<\/b> 1585 CHF CHF<br><b>Living Space:<\/b> Living space: NA m²","<b>Address:<\/b> 8 Rue Charles-Cusin, 1201 Genève<br><b>Price:<\/b> 900 CHF CHF<br><b>Living Space:<\/b> Living space: 25 m2 m²","<b>Address:<\/b> Rue du Village-Suisse 21, 1205 Genève<br><b>Price:<\/b> 2049 CHF CHF<br><b>Living Space:<\/b> Living space: 82 m2 m²","<b>Address:<\/b> Avenue de Châtelaine 85, 1219 Châtelaine<br><b>Price:<\/b> 1790 CHF CHF<br><b>Living Space:<\/b> Living space: 48 m2 m²","<b>Address:<\/b> Avenue de Sainte-Clotilde 18, 1205 Genève<br><b>Price:<\/b> 3180 CHF CHF<br><b>Living Space:<\/b> Living space: 108 m2 m²","<b>Address:<\/b> Chemin Ernest-Pisteur 17, 1255 Veyrier<br><b>Price:<\/b> 3600 CHF CHF<br><b>Living Space:<\/b> Living space: 142 m2 m²"],null,null,null,null,{"interactive":false,"permanent":false,"direction":"auto","opacity":1,"offset":[0,0],"textsize":"10px","textOnly":false,"className":"","sticky":true},null]}],"limits":{"lat":[46.165118,46.2394532],"lng":[6.0793017,6.2281829]}},"evals":[],"jsHooks":[]}</script>
+<div class="leaflet html-widget html-fill-item" id="htmlwidget-edf31379dfc561af828a" style="width:672px;height:480px;"></div>
+<script type="application/json" data-for="htmlwidget-edf31379dfc561af828a">{"x":{"options":{"crs":{"crsClass":"L.CRS.EPSG3857","code":null,"proj4def":null,"projectedBounds":null,"options":{}}},"calls":[{"method":"addTiles","args":["https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",null,null,{"minZoom":0,"maxZoom":18,"tileSize":256,"subdomains":"abc","errorTileUrl":"","tms":false,"noWrap":false,"zoomOffset":0,"zoomReverse":false,"opacity":1,"zIndex":1,"detectRetina":false,"attribution":"&copy; <a href=\"https://openstreetmap.org/copyright/\">OpenStreetMap<\/a>,  <a href=\"https://opendatacommons.org/licenses/odbl/\">ODbL<\/a>"}]},{"method":"addMarkers","args":[[46.2000863,46.2118562,46.2071742,46.2394532,46.1899232,46.2038132,46.2056314,46.1956474,46.1950047,46.1971378,46.2206955,46.2008152,46.2006646,46.2374939,46.2091589,46.1966201,46.2162981,46.1966201,46.1966201,46.2105893,46.2306871,46.2228906,46.2086816,46.1979432,46.2106206,46.1983816,46.2106083,46.2012188,46.165118],[6.1607588,6.1304901,6.1102469,6.0793017,6.1511107,6.1377171,6.1172248,6.1518878,6.149666,6.153259,6.1401586,6.1726055,6.1380815,6.1245292,6.107591,6.142891,6.1202585,6.142891,6.142891,6.1468006,6.1214213,6.2229769,6.1382724,6.1977409,6.1475054,6.1341355,6.1121944,6.1352742,6.1865373],null,null,null,{"interactive":true,"draggable":false,"keyboard":true,"title":"","alt":"","zIndexOffset":0,"opacity":1,"riseOnHover":false,"riseOffset":250},["<b>Address:<\/b> Rue de la Terrassière 58, 1207 Genève<br><b>Price:<\/b> 1900 CHF CHF<br><b>Living Space:<\/b> Living space: 63 m2 m²","<b>Address:<\/b> Rue Liotard 46, 1202 Genève<br><b>Price:<\/b> 2100 CHF CHF<br><b>Living Space:<\/b> Living space: NA m²","<b>Address:<\/b> Avenue Henri-Golay 36, 1219 Châtelaine<br><b>Price:<\/b> 2340 CHF CHF<br><b>Living Space:<\/b> Living space: 73 m2 m²","<b>Address:<\/b> Rue des Lattes 51, 1217 Meyrin<br><b>Price:<\/b> 1980 CHF CHF<br><b>Living Space:<\/b> Living space: 73 m2 m²","<b>Address:<\/b> Chemin de l'Escalade 3, 1206 Genève<br><b>Price:<\/b> Price on request NA CHF<br><b>Living Space:<\/b> Living space: 150 m2 m²","<b>Address:<\/b> Rue des Rois 1, 1204 Genève<br><b>Price:<\/b> 3080 CHF CHF<br><b>Living Space:<\/b> Living space: 117 m2 m²","<b>Address:<\/b> Avenue d'Aire 73B, 1203 Genève<br><b>Price:<\/b> 2231 CHF CHF<br><b>Living Space:<\/b> Living space: 104 m2 m²","<b>Address:<\/b> Chemin Malombré 12, 1206 Genève<br><b>Price:<\/b> Price on request NA CHF<br><b>Living Space:<\/b> Living space: NA m²","<b>Address:<\/b> Rue Sautter 15, 1205 Genève<br><b>Price:<\/b> 3600 CHF CHF<br><b>Living Space:<\/b> Living space: 135 m2 m²","<b>Address:<\/b> RUE DU MONT-DE-SION 4, 1206 Genève<br><b>Price:<\/b> 5700 CHF CHF<br><b>Living Space:<\/b> Living space: 136 m2 m²","<b>Address:<\/b> RUE DE MONTBRILLANT 83, 1202 Genève<br><b>Price:<\/b> 1470 CHF CHF<br><b>Living Space:<\/b> Living space: NA m²","<b>Address:<\/b> Chemin des Tulipiers, 1208 Genève<br><b>Price:<\/b> 3170 CHF CHF<br><b>Living Space:<\/b> Living space: 96 m2 m²","<b>Address:<\/b> Rue du Vieux-Billard 14, 1205 Genève<br><b>Price:<\/b> 2245 CHF CHF<br><b>Living Space:<\/b> Living space: NA m²","<b>Address:<\/b> Chemin Alfred-Bétems 5, 1218 Le Grand-Saconnex<br><b>Price:<\/b> 1800 CHF CHF<br><b>Living Space:<\/b> Living space: NA m²","<b>Address:<\/b> Chemin de l'Ecu 15, 1219 Châtelaine<br><b>Price:<\/b> 1245 CHF CHF<br><b>Living Space:<\/b> Living space: 31 m2 m²","<b>Address:<\/b> Rue Vignier 2, 1205 Genève<br><b>Price:<\/b> 1030 CHF CHF<br><b>Living Space:<\/b> Living space: NA m²","<b>Address:<\/b> Av. du Bouchet 10, 1209 Genève<br><b>Price:<\/b> 2010 CHF CHF<br><b>Living Space:<\/b> Living space: 70 m2 m²","<b>Address:<\/b> Rue Vignier 2, 1205 Genève<br><b>Price:<\/b> 1610 CHF CHF<br><b>Living Space:<\/b> Living space: NA m²","<b>Address:<\/b> Rue Vignier 2, 1205 Genève<br><b>Price:<\/b> 1610 CHF CHF<br><b>Living Space:<\/b> Living space: NA m²","<b>Address:<\/b> Rue Alfred-Vincent, 1201 Genève<br><b>Price:<\/b> 2100 CHF CHF<br><b>Living Space:<\/b> Living space: 63 m2 m²","<b>Address:<\/b> Chemin François-Lehmann 12, 1218 Le Grand-Saconnex<br><b>Price:<\/b> 1685 CHF CHF<br><b>Living Space:<\/b> Living space: 61 m2 m²","<b>Address:<\/b> Choulex, 1244 Choulex<br><b>Price:<\/b> 3000 CHF CHF<br><b>Living Space:<\/b> Living space: 93 m2 m²","<b>Address:<\/b> 5 Rue du Jura, 1201 Genève<br><b>Price:<\/b> 1490 CHF CHF<br><b>Living Space:<\/b> Living space: 55 m2 m²","<b>Address:<\/b> Av. Bel-Air 45A, 1225 Chêne-Bourg<br><b>Price:<\/b> 1585 CHF CHF<br><b>Living Space:<\/b> Living space: NA m²","<b>Address:<\/b> 8 Rue Charles-Cusin, 1201 Genève<br><b>Price:<\/b> 900 CHF CHF<br><b>Living Space:<\/b> Living space: 25 m2 m²","<b>Address:<\/b> Rue du Village-Suisse 21, 1205 Genève<br><b>Price:<\/b> 2049 CHF CHF<br><b>Living Space:<\/b> Living space: 82 m2 m²","<b>Address:<\/b> Avenue de Châtelaine 85, 1219 Châtelaine<br><b>Price:<\/b> 1790 CHF CHF<br><b>Living Space:<\/b> Living space: 48 m2 m²","<b>Address:<\/b> Avenue de Sainte-Clotilde 18, 1205 Genève<br><b>Price:<\/b> 3180 CHF CHF<br><b>Living Space:<\/b> Living space: 108 m2 m²","<b>Address:<\/b> Chemin Ernest-Pisteur 17, 1255 Veyrier<br><b>Price:<\/b> 3600 CHF CHF<br><b>Living Space:<\/b> Living space: 142 m2 m²"],null,null,null,null,{"interactive":false,"permanent":false,"direction":"auto","opacity":1,"offset":[0,0],"textsize":"10px","textOnly":false,"className":"","sticky":true},null]}],"limits":{"lat":[46.165118,46.2394532],"lng":[6.0793017,6.2229769]}},"evals":[],"jsHooks":[]}</script>
 </div>
 </div>
 </div>

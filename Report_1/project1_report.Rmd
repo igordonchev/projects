@@ -53,22 +53,21 @@ dim(rental_raw)
 The numbers are all mixed up with text right now like "CHF" or "m2", so I'm using `parse_number()` to turn them into real numbers. Also fixing the column names and checking if the address says on request.
 
 ```{r}
-rental_clean <- clean_names(rental_raw)
-
-rental_clean$price_chf <- parse_number(rental_clean$price)
-rental_clean$living_space_m2 <- parse_number(rental_clean$living_space)
-rental_clean$floor_num <- parse_number(rental_clean$floor)
-rental_clean$rooms_num <- parse_number(rental_clean$rooms)
-rental_clean$postcode_cat <- as.character(parse_number(rental_clean$address))
-
-address_lower <- str_to_lower(rental_clean$address)
-rental_clean$address_status <- ifelse(
-  str_detect(address_lower, "on request") | str_detect(address_lower, "sur demande"),
-  "On Request",
-  "Available"
-)
-
-rental_clean$price_per_m2 <- rental_clean$price_chf / rental_clean$living_space_m2
+rental_clean <- rental_raw %>%
+  clean_names() %>%
+  mutate(
+    price_chf       = parse_number(price),
+    living_space_m2 = parse_number(living_space),
+    floor_num       = parse_number(floor),
+    rooms_num       = parse_number(rooms),
+    postcode_cat    = str_extract(address, "\\b\\d{4}\\b"),
+    address_status  = if_else(
+      str_detect(str_to_lower(address), "on request|sur demande"),
+      "On Request",
+      "Available"
+    ),
+    price_per_m2    = price_chf / living_space_m2
+  )
 ```
 
 Let's look at what the dataset looks like now.
@@ -83,71 +82,7 @@ And quick summary of prices and space just to see what we have.
 summary(rental_clean$price_chf)
 summary(rental_clean$living_space_m2)
 ```
-## Part 1b: Exploring the data and fixing types
 
-Now I'm checking what data types R gave us for each column and making sure everything is converted properly. I am creating new numeric columns for calculations so we don't lose any of the original scraped information.
-
-```{r}
-glimpse(rental_raw)
-```
-
-The columns all came in as character strings because they have text like "CHF" or "m2" mixed in. I will extract the numbers out into new numeric columns using `parse_number()` while keeping the original columns intact.
-
-```{r}
-rental_clean <- rental_raw %>%
-  clean_names() %>%
-  mutate(
-    price_chf       = parse_number(price),
-    living_space_m2 = parse_number(living_space),
-    floor_num       = parse_number(floor),
-    rooms_num       = parse_number(rooms),
-    
-    postcode_cat    = str_extract(address, "\\b\\d{4}\\b"),
-      address_status  = if_else(
-      str_detect(str_to_lower(address), "on request|sur demande"),
-      "On Request",
-      "Available"
-    ),
-    
-      price_per_m2    = price_chf / living_space_m2
-  )
-```
-
-### Adjustments made:
-- Kept all 9 original raw character columns intact so no info is lost.
-- Converted `price` to numeric `price_chf`.
-- Converted `living_space` to numeric `living_space_m2`.
-- Converted `floor` to numeric `floor_num`.
-- Converted `rooms` to numeric `rooms_num`.
-- Created `postcode_cat` by extracting the zip codes from the `address` text.
-- Added `address_status` to tag hidden addresses ("On Request" vs "Available").
-- Calculated `price_per_m2` for cost analysis.
-
----
-
-### Checking unique values for character columns
-
-Let's look at all distinct entries in the original text columns to spot any strange values or missing patterns.
-
-```{r}
-# Checking unique categories in object_type and availability
-unique(rental_clean$object_type)
-unique(rental_clean$availability)
-unique(rental_clean$address_status)
-```
-
----
-
-### Checking ranges for numerical variables
-
-
-```{r}
-rental_clean %>%
-  select(price_chf, living_space_m2, floor_num, rooms_num, price_per_m2) %>%
-  summary()
-```
-
-# Visualizing the data
 
 ## Part 2: Plotting price vs. living space
 
@@ -357,7 +292,7 @@ knitr::kable(summary_stats_price, digits = 2, caption = "Summary Statistics of T
 ### Step 2: Data Cleaning Chunk
 filter out missing (`NA`) and infinite values
 
-```
+```{r}
 rental_ttest_price_data <- rental_clean %>%
   mutate(price_num = suppressWarnings(readr::parse_number(as.character(price)))) %>%
   filter(!is.na(price_num) & !is.infinite(price_num))
@@ -369,9 +304,10 @@ We test whether the mean total price differs significantly between "On Request" 
 - Null Hypothesis ($H_0$): $\mu_{\text{On Request}} = \mu_{\text{Available}}$
 - Alternative Hypothesis ($H_1$): $\mu_{\text{On Request}} \neq \mu_{\text{Available}}$
 
+```{r}
 ttest_price_result <- t.test(price_num ~ address_status, data = rental_ttest_price_data)
 ttest_price_result
-
+```
 ### Step 4: Comparison with Price per m² & Interpretation
 
 #### 1. Comparison of Results
