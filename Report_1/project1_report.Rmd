@@ -1,22 +1,15 @@
 ---
 title: "Project 1"
 author: "Igor Donchev"
-date: "`r Sys.Date()`"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(
-  echo = TRUE, 
-  message = FALSE, 
-  warning = FALSE
-)
-```
-
-In this file I am trying to grab data from the rental site and clean it up a bit so we can use it later.
 
 
-```{r load-packages}
+I am trying to grab data from the rental site and clean it up a bit so we can use it later.
+
+
+```{r}
 library(tidyverse)
 library(rvest)
 library(janitor)
@@ -28,7 +21,7 @@ library(janitor)
 
 So here I just put the website link and use rvest to get all the listing boxes from the page and stick them into a table.
 
-```{r scrape-rental-site}
+```{r}
 url <- "https://epfl-exts.github.io/rental-scrape/"
 
 page <- read_html(url)
@@ -49,7 +42,7 @@ rental_raw <- tibble(
 
 Let's see how big this table is.
 
-```{r check-dim}
+```{r}
 dim(rental_raw)
 ```
 
@@ -59,7 +52,7 @@ dim(rental_raw)
 
 The numbers are all mixed up with text right now like "CHF" or "m2", so I'm using `parse_number()` to turn them into real numbers. Also fixing the column names and checking if the address says on request.
 
-```{r clean-rental-data}
+```{r}
 rental_clean <- clean_names(rental_raw)
 
 rental_clean$price_chf <- parse_number(rental_clean$price)
@@ -80,13 +73,13 @@ rental_clean$price_per_m2 <- rental_clean$price_chf / rental_clean$living_space_
 
 Let's look at what the dataset looks like now.
 
-```{r inspect-clean}
+```{r}
 glimpse(rental_clean)
 ```
 
 And quick summary of prices and space just to see what we have.
 
-```{r check-ranges}
+```{r}
 summary(rental_clean$price_chf)
 summary(rental_clean$living_space_m2)
 ```
@@ -94,13 +87,13 @@ summary(rental_clean$living_space_m2)
 
 Now I'm checking what data types R gave us for each column and making sure everything is converted properly. I am creating new numeric columns for calculations so we don't lose any of the original scraped information.
 
-```{r check-types}
+```{r}
 glimpse(rental_raw)
 ```
 
 The columns all came in as character strings because they have text like "CHF" or "m2" mixed in. I will extract the numbers out into new numeric columns using `parse_number()` while keeping the original columns intact.
 
-```{r clean-data-types}
+```{r}
 rental_clean <- rental_raw %>%
   clean_names() %>%
   mutate(
@@ -136,7 +129,7 @@ rental_clean <- rental_raw %>%
 
 Let's look at all distinct entries in the original text columns to spot any strange values or missing patterns.
 
-```{r check-unique-chars}
+```{r}
 # Checking unique categories in object_type and availability
 unique(rental_clean$object_type)
 unique(rental_clean$availability)
@@ -148,7 +141,7 @@ unique(rental_clean$address_status)
 ### Checking ranges for numerical variables
 
 
-```{r check-numeric-ranges}
+```{r}
 rental_clean %>%
   select(price_chf, living_space_m2, floor_num, rooms_num, price_per_m2) %>%
   summary()
@@ -160,7 +153,7 @@ rental_clean %>%
 
 I am creating a scatterplot here using `ggplot2` to see if bigger apartments cost more money.
 
-```{r plot-price-space}
+```{r}
 library(ggplot2)
 
 ggplot(rental_clean, aes(x = living_space_m2, y = price_chf)) +
@@ -178,11 +171,11 @@ Looking at the plot, there is a upward trend—as living space increases, the pr
 
  The red trend line confirms that bigger places generally cost more money on average.
  
- ## Part 3: Counting properties by postcode
+## Part 3: Counting properties by postcode
 
 Here I am creating a bar plot using `ggplot2` to count how many rental listings are located in each postcode area. This will help us see if the agency is more active in certain neighborhoods than others.
 
-```{r plot-postcode-bars}
+```{r}
 library(ggplot2)
 
 ggplot(rental_clean, aes(x = postcode_cat, fill = postcode_cat)) +
@@ -286,7 +279,7 @@ In this section, we summarize and statistically compare the price per square met
 
 We calculate the group size, median, mean, standard deviation, minimum, and maximum of `price_per_m2` for both address availability categories.
 
-```{r part6-summary-table}
+```{r}
 summary_stats <- rental_clean %>%
   filter(!is.na(price_per_m2) & !is.infinite(price_per_m2)) %>%
   group_by(address_status) %>%
@@ -302,7 +295,7 @@ summary_stats <- rental_clean %>%
 knitr::kable(summary_stats, digits = 2, caption = "Summary Statistics of Price per m² (CHF) by Address Status")
 ```
 
-Step 2: Initial Observations & Data Adjustments
+### Step 2: Initial Observations & Data Adjustments
 Initial Observations:
 Higher Unit Cost: Properties listed as "On Request" show a higher mean and median price per square meter than standard "Available" properties.
 
@@ -311,17 +304,17 @@ Direction: The difference is positive—"On Request" listings are more expensive
 Data Inspection & Adjustments Before Testing:
 Missing / Infinite Values: Listings missing either price or surface area result in NA or Inf (if living space is 0). These must be dropped so they don't break the statistical functions.
 
-```{r part6-data-cleaning}
+```{r}
 # Clean dataset for t-test
 rental_ttest_data <- rental_clean %>%
   filter(!is.na(price_per_m2) & !is.infinite(price_per_m2))
 ```
 
-Step 3:
+### Step 3:
   Hypotheses to compare the mean price per square meter between the two group There is no difference in average price per square meter .
 Alternative Hypothesis There is a statistically significant difference in average price per square meter between the two groups
 
-```{r part6-ttest}
+```{r}
 ttest_result <- t.test(price_per_m2 ~ address_status, data = rental_ttest_data)
 ttest_result
 ```
@@ -332,11 +325,6 @@ ttest_result
 - The statistical test confirms —there is a  significant difference in average price per square meter
 - Premium properties are often listed with addresses "On Request" 
 
-## Part 7: Statistical Analysis of Total Price by Address Status
-
-In this section, we repeat the analysis conducted in Part 6 using total listing price (`price` in CHF) instead of unit price per square meter (`price_per_m2`).
-
----
 
 ## Part 7: Statistical Analysis of Total Price by Address Status
 
@@ -346,8 +334,9 @@ In this section, we repeat the analysis conducted in Part 6 using total listing 
 
 ### Step 1: Summary Statistics Table for Total Price
 
-We calculate summary statistics for `price` grouped by address availability.
-```{r part7-summary-table}
+I calculate summary statistics for `price` grouped by address availability.
+
+```{r}
 summary_stats_price <- rental_clean %>%
   # Ensure price is converted to numeric (strips "CHF", "Price on request", commas, etc.)
   mutate(price_num = suppressWarnings(readr::parse_number(as.character(price)))) %>%
@@ -382,7 +371,6 @@ We test whether the mean total price differs significantly between "On Request" 
 
 ttest_price_result <- t.test(price_num ~ address_status, data = rental_ttest_price_data)
 ttest_price_result
-```
 
 ### Step 4: Comparison with Price per m² & Interpretation
 
@@ -398,13 +386,11 @@ ttest_price_result
 
 Listings marked as "On Request" command statistically significant price premiums across all dimensions (total price, living area, and price per square meter) relative to standard "Available" listings
 
-```{r part8-geocoding-map, message=TRUE, warning=FALSE}
-# Load required spatial libraries
-suppressPackageStartupMessages({
+```{r}
   library(tidygeocoder)
   library(leaflet)
   library(dplyr)
-})
+
 
 # 1. Select a subset of 30 properties with valid addresses
 map_sample <- rental_clean %>%
