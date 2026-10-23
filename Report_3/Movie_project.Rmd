@@ -77,8 +77,10 @@ The extracted studio ID for Pixar is `3`.
 In this section, we programmatically query all animated feature films produced by Pixar (Company ID `3`), sort them by descending revenue, and iterate through the API's paginated responses using `purrr::map_dfr()` to build a complete master dataset.
 
 ```{r}
+
 library(tidyverse)
 
+# 1. Fetch initial page to check total pages count
 query_params_pixar <- list(
   api_key = api_key,
   with_companies = "3",
@@ -89,17 +91,9 @@ query_params_pixar <- list(
 response_pixar <- GET(discover_url, query = query_params_pixar)
 data_pixar <- fromJSON(content(response_pixar, "text", encoding = "UTF-8"), flatten = TRUE)
 
-df_pixar_movies <- as_tibble(data_pixar$results)
-head(df_pixar_movies)
-```
-
-### Handling Pagination with `purrr::map()`
-
-To fetch all available pages dynamically up to the API's total page count limit:
-
-```{r}
 total_pages <- data_pixar$total_pages
 
+# 2. Iterate through all available pages dynamically
 all_pixar_movies <- map_dfr(1:total_pages, function(p) {
   res <- GET(discover_url, query = list(
     api_key = api_key,
@@ -188,8 +182,16 @@ ggplot(combined_movies, aes(x = studio, y = vote_average, fill = studio)) +
   theme(legend.position = "none")
 ```
 
-### Initial remarks
-  Looking at the boxplot, Pixar films generally have a higher median vote average compared to Disney films, showing more consistent ratings overall.Statistical Hypothesis and T-TestTo see if the difference we see in the boxplot is real or just random chance, we run a t-test.Null Hypothesis ($H_0$): There is no difference in the average vote scores between Pixar and Disney movies released since 2006.Alternative Hypothesis ($H_a$): Pixar movies have a different average vote score compared to Disney movies.
+#### Initial Remarks
+
+Looking at the boxplot, Pixar films generally have a higher median vote average compared to Disney films, showing more consistent ratings overall.
+
+#### Statistical Hypothesis and T-Test
+
+To see if the difference we see in the boxplot is real or just random chance, we run a t-test:
+
+* **Null Hypothesis ($H_0$):** There is no difference in the average vote scores between Pixar and Disney movies released since 2006.
+* **Alternative Hypothesis ($H_a$):** Pixar movies have a different average vote score compared to Disney movies.
   
 ```{r}
 t_test_result <- t.test(vote_average ~ studio, data = combined_movies)

@@ -208,34 +208,29 @@ To test this statistically, I ran a Chi-Square test to check if winning a medal 
 - **Alternative Hypothesis ($H_1$):** There is a relationship between country and winning a medal.
 
 ```{r}
-# 1. Join full medals table (including NAs) with country table
-all_entries <- medals %>%
-  left_join(country, by = c("athlete_id", "Games")) %>%
-  filter(NOC %in% top_15_countries)
-
-# 2. Count medals won vs not won per country
+# 1. Count medals won vs not won per country (reusing all_entries from above)
 medal_counts <- all_entries %>%
   mutate(won = ifelse(!is.na(Medal), "Won", "No Medal")) %>%
   group_by(NOC, won) %>%
   summarise(count = n(), .groups = "drop") %>%
   pivot_wider(names_from = won, values_from = count, values_fill = 0)
 
-# 3. Convert to matrix for chisq.test
+# 2. Convert to matrix for chisq.test
 test_matrix <- as.matrix(medal_counts[, c("Won", "No Medal")])
 rownames(test_matrix) <- medal_counts$NOC
 
-# 4. Run Chi-Square test
+# 3. Run Chi-Square test
 chisq.test(test_matrix)
 
 ```
 
-## Pearson's Chi-squared test
+### Statistical Test Interpretation
 
-data:  test_matrix
-X-squared = 4426.6, df = 14, p-value < 2.2e-16
+The test yielded a test statistic of $\chi^2 = 4426.6$ with 14 degrees of freedom, resulting in an extraordinarily small $p$-value ($p < 2.2 \times 10^{-16}$).
 
-  The test yielded a test statistic of $\chi^2 = 4426.6$ with 14 degrees of freedom, resulting in an extraordinarily small $p$-value ($p < 2.2 \times 10^{-16}$).Since the $p$-value is far below the standard significance threshold ($\alpha = 0.05$), we reject the null hypothesis.This statistical result strongly aligns with the observations from our bar chart: there is a highly significant relationship between a country and its probability of winning a medal per event entry.
-  
+Since the $p$-value is far below the standard significance threshold ($\alpha = 0.05$), we reject the null hypothesis.
+
+This statistical result strongly aligns with the observations from our bar chart: there is a highly significant relationship between a country and its probability of winning a medal per event entry.
   
 ## Part 6: Sport-Level Average Height vs. Average Weight and BMI Analysis
 
@@ -310,11 +305,15 @@ To examine how the distribution of medals has evolved over time, we aggregated t
 The `medals` table records individual medal awards but lacks explicit chronological values. A `left_join()` on the shared `Games` key was used to append the calendar `Year` and operational `Season` (Summer vs. Winter) from the `games` table, allowing for precise time-series aggregation and faceting.
 
 ```{r}
-# 1. Join medals with games to get Year and Season, then aggregate
+# 1. Deduplicate games table to prevent row duplication on "1956 Summer"
+games_clean <- games %>% 
+  select(Games, Year, Season) %>% 
+  distinct()
+
+# 2. Join medals with cleaned games table and aggregate
 medal_trends <- medals %>%
-  left_join(games, by = c("Games" = "Games"), relationship = "many-to-many") %>%
+  left_join(games_clean, by = "Games") %>%
   filter(!is.na(Year) & !is.na(Medal) & !is.na(Season)) %>%
-  # Standardize medal names just in case of casing differences
   mutate(Medal = str_to_title(Medal)) %>%
   filter(Medal %in% c("Gold", "Silver", "Bronze")) %>%
   group_by(Year, Season, Medal) %>%
