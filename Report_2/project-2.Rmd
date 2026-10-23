@@ -1,3 +1,8 @@
+---
+title: "Project 2: Analysis of Zurich Politicians"
+author: "Igor Donchev"
+output: html_document
+---
 # Data Cleaning & Fixing the Boundaries
 
 Before we can plot anything or run statistical tests, we have to deal with the raw dataset. Like most real-world data, `zh_politicians.db` isn't clean right out of the box—there are missing IDs, weird values, and formatting quirks that need to be fixed first.
